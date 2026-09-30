@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Cross EPS — Gestionnaire Multi-Courses</title>
+  <title>Cross EPS — Poste d'Arrivée & Chrono</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     :root {
       --primary: #2563eb;
@@ -22,7 +21,6 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background: var(--bg); color: var(--text); padding-bottom: 60px; }
 
-    /* Navigation */
     nav.app-nav {
       background: #0f172a;
       color: white;
@@ -53,7 +51,6 @@
     .tab-content { display: none; }
     .tab-content.active { display: block; }
 
-    /* Boutons et cartes */
     .btn {
       padding: 8px 14px;
       font-size: 0.85rem;
@@ -87,7 +84,6 @@
       align-items: center;
     }
 
-    /* Checkboxes niveaux de course */
     .level-pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
     .level-label {
       display: flex;
@@ -108,7 +104,6 @@
       color: var(--primary);
     }
 
-    /* Chrono */
     .chrono-display {
       font-size: 3rem;
       font-weight: 800;
@@ -117,9 +112,8 @@
       text-align: center;
       margin: 8px 0;
     }
-    #reader { width: 100%; min-height: 200px; border-radius: 8px; overflow: hidden; background: #000; }
+    #reader { width: 100%; min-height: 220px; border-radius: 8px; overflow: hidden; background: #000; }
 
-    /* Bannière scan */
     .last-scan-banner {
       margin-top: 10px;
       padding: 10px 14px;
@@ -138,7 +132,6 @@
       font-size: 0.95rem;
     }
 
-    /* Tables & sous-onglets classement */
     .sub-tabs { display: flex; gap: 6px; margin-bottom: 10px; border-bottom: 2px solid var(--border); padding-bottom: 6px; }
     .sub-tab {
       background: transparent;
@@ -159,63 +152,42 @@
     .dos-pill { background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-weight: 800; }
     .gender-pill-F { background: #fce7f3; color: #be185d; padding: 2px 6px; border-radius: 4px; font-weight: 800; }
     .gender-pill-M { background: #e0e7ff; color: #3730a3; padding: 2px 6px; border-radius: 4px; font-weight: 800; }
-
-    /* Impression masquée */
-    #printArea { display: none; }
-    @media print {
-      body { background: white; margin: 0; }
-      nav.app-nav, .container { display: none !important; }
-      #printArea { display: block !important; width: 100%; }
-      @page { size: A4 portrait; margin: 8mm; }
-      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .print-grid-4 { width: 100%; height: 280mm; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 6mm; page-break-after: always; }
-      .print-grid-2 { width: 100%; height: 280mm; display: grid; grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; gap: 8mm; page-break-after: always; }
-      .dossard-box { border: 2px dashed #475569; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; }
-      .dossard-top { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 4px; font-weight: bold; }
-      .dossard-main { display: flex; justify-content: space-between; align-items: center; margin: 8px 0; }
-      .dossard-num { font-size: 56px; font-weight: 900; line-height: 1; }
-      .print-grid-2 .dossard-num { font-size: 80px; }
-      .dossard-bot { border-top: 1.5px solid #64748b; padding-top: 4px; display: flex; justify-content: space-between; font-weight: bold; }
-    }
   </style>
 </head>
 <body>
 
 <nav class="app-nav">
-  <div class="nav-title">🏃 Cross EPS</div>
+  <div class="nav-title">⏱️ Cross EPS Arrivée</div>
   <div class="nav-tabs">
-    <button class="nav-tab active" onclick="switchTab('courseTab', this)">⏱️ Course & Arrivée</button>
-    <button class="nav-tab" onclick="switchTab('resultsTab', this)">📊 Classements</button>
-    <button class="nav-tab" onclick="switchTab('profTab', this)">🎓 Dossards & Élèves</button>
+    <button class="nav-tab active" onclick="switchTab('courseTab', this)">Course & Scan</button>
+    <button class="nav-tab" onclick="switchTab('resultsTab', this)">Classements</button>
+    <button class="nav-tab" onclick="switchTab('studentsTab', this)">Élèves (<span id="tabCount">0</span>)</button>
   </div>
 </nav>
 
-<!-- 1. ONGLET COURSE & SCAN -->
+<!-- 1. COURSE & SCAN -->
 <div class="container tab-content active" id="courseTab">
   
   <div class="card">
     <div class="card-title">
-      <span>1. Configuration de la Course</span>
-      <span class="badge" id="raceStatusBadge" style="font-size:0.8rem; background:#e2e8f0; padding:4px 8px; border-radius:6px;">En attente de départ</span>
+      <span>1. Départ & Niveaux</span>
+      <span class="badge" id="raceStatusBadge" style="font-size:0.8rem; background:#e2e8f0; padding:4px 8px; border-radius:6px;">En attente</span>
     </div>
     
     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
-      <label style="font-size:0.85rem; font-weight:700;">Nom de la course :</label>
-      <input type="text" id="raceNameInput" value="Course 1" style="padding:6px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:bold; font-size:0.9rem;">
+      <label style="font-size:0.85rem; font-weight:700;">Course :</label>
+      <input type="text" id="raceNameInput" value="Course 1 (6èmes)" style="padding:6px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:bold; font-size:0.9rem;">
       <button class="btn btn-outline" onclick="startNewRacePrompt()">+ Nouvelle Course</button>
     </div>
 
-    <div style="font-size:0.85rem; font-weight:700; margin-top:6px;">Qui participe à ce départ ?</div>
+    <div style="font-size:0.85rem; font-weight:700; margin-top:6px;">Niveaux autorisés :</div>
     <div class="level-pills">
-      <label class="level-label"><input type="checkbox" value="CM2" class="level-chk" checked> CM2 (Écoles)</label>
+      <label class="level-label"><input type="checkbox" value="CM2" class="level-chk"> CM2 (Écoles)</label>
       <label class="level-label"><input type="checkbox" value="6E" class="level-chk" checked> 6èmes</label>
       <label class="level-label"><input type="checkbox" value="5E" class="level-chk"> 5èmes</label>
       <label class="level-label"><input type="checkbox" value="4E" class="level-chk"> 4èmes</label>
       <label class="level-label"><input type="checkbox" value="3E" class="level-chk"> 3èmes</label>
     </div>
-    <p style="font-size:0.75rem; color:var(--muted);">
-      ⚠️ Si un élève scanné n'appartient pas aux niveaux cochés ci-dessus, une alerte vous préviendra.
-    </p>
   </div>
 
   <div class="card" style="text-align:center;">
@@ -230,7 +202,7 @@
   <div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px;">
       <select id="cameraSelect" style="flex:1; padding:8px; font-size:0.85rem; border-radius:6px; border:1px solid #cbd5e1;"></select>
-      <button class="btn btn-primary" id="btnCamToggle" onclick="startCameraManual()">📷 Démarrer</button>
+      <button class="btn btn-primary" id="btnCamToggle" onclick="startCameraManual()">📷 Démarrer Caméra</button>
     </div>
     <div id="reader"></div>
     <div id="cameraStatus" style="font-size:0.85rem; color:#dc2626; margin-top:6px; font-weight:600;"></div>
@@ -249,20 +221,18 @@
       <div id="lastScanMeta" style="color:#047857; font-size:0.85rem; margin-top:2px;">Classe - Dossard # | Place Sexe</div>
     </div>
   </div>
-
 </div>
 
-<!-- 2. ONGLET CLASSEMENTS & RÉSULTATS -->
+<!-- 2. CLASSEMENTS -->
 <div class="container tab-content" id="resultsTab">
-  
   <div class="card">
     <div class="card-title">
-      <span>Sélectionner la course à afficher :</span>
+      <span>Course affichée :</span>
       <select id="selectDisplayRace" onchange="renderLeaderboard()" style="padding:6px; border-radius:6px; border:1px solid #cbd5e1; font-weight:bold;"></select>
     </div>
     
     <div class="sub-tabs">
-      <button class="sub-tab active" id="subTabAll" onclick="switchSubTab('ALL')">🏆 Général (Scratch)</button>
+      <button class="sub-tab active" id="subTabAll" onclick="switchSubTab('ALL')">🏆 Scratch</button>
       <button class="sub-tab" id="subTabF" onclick="switchSubTab('F')">👧 Filles</button>
       <button class="sub-tab" id="subTabM" onclick="switchSubTab('M')">👦 Garçons</button>
     </div>
@@ -278,7 +248,7 @@
     <div class="table-container">
       <table>
         <thead>
-          <tr id="leaderboardHead">
+          <tr>
             <th>Pl. Scratch</th>
             <th>Pl. Sexe</th>
             <th>Dos.</th>
@@ -292,52 +262,26 @@
       </table>
     </div>
   </div>
-
 </div>
 
-<!-- 3. ONGLET PROFESSEUR & DOSSARDS -->
-<div class="container tab-content" id="profTab">
-  
+<!-- 3. ÉLÈVES & IMPORT -->
+<div class="container tab-content" id="studentsTab">
   <div class="card">
     <div class="card-title">
-      <span>1. Importer les Élèves (CSV)</span>
-      <span class="badge" style="font-size:0.8rem; color:var(--muted);" id="studentTotalCount">0 élève</span>
+      <span>Mise à jour des Élèves (CSV)</span>
+      <button class="btn btn-outline" style="font-size:0.8rem;" onclick="loadDefaultStudents()">↺ Recharger les 421 élèves</button>
     </div>
-    <div class="import-dropzone" onclick="document.getElementById('csvFileInput').click()" style="border:2px dashed #94a3b8; border-radius:8px; padding:20px; text-align:center; background:#f1f5f9; cursor:pointer; margin-bottom:10px;">
-      <p style="font-weight:700; color:var(--primary);">📂 Cliquer pour sélectionner le fichier CSV</p>
-      <p style="font-size:0.8rem; color:var(--muted);">Détecte Nom, Prénom, Sexe, Classe...</p>
+    <div onclick="document.getElementById('csvFileInput').click()" style="border:2px dashed #2563eb; border-radius:8px; padding:18px; text-align:center; background:#eff6ff; cursor:pointer; margin-bottom:10px;">
+      <p style="font-weight:700; color:#1d4ed8;">📂 Cliquez pour importer un nouveau CSV sur cet appareil</p>
+      <p style="font-size:0.8rem; color:#64748b;">Gère UTF-8 et Windows-1252 (accents préservés)</p>
       <input type="file" id="csvFileInput" style="display:none;" accept=".csv,text/csv" onchange="handleCSVUpload(event)">
     </div>
-    <div style="display:flex; justify-content:space-between; gap:8px;">
-      <button class="btn btn-outline" style="font-size:0.8rem;" onclick="loadDefaultTemplate()">Charger 421 élèves actuels</button>
-      <button class="btn btn-danger" style="font-size:0.8rem;" onclick="clearStudentsDB()">Vider la liste</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title"><span>2. Imprimer les Dossards avec QR Code</span></div>
-    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
-      <label style="font-size:0.85rem; font-weight:600;">Format :
-        <select id="printFormatSelect" style="padding:6px; border-radius:6px; border:1px solid #cbd5e1;">
-          <option value="4">4 dossards par page (A6)</option>
-          <option value="2">2 dossards par page (A5)</option>
-        </select>
-      </label>
-
-      <label style="font-size:0.85rem; font-weight:600;">Classe / Groupe :
-        <select id="printClassFilter" style="padding:6px; border-radius:6px; border:1px solid #cbd5e1;">
-          <option value="ALL">Toutes les classes</option>
-        </select>
-      </label>
-
-      <button class="btn btn-primary" onclick="generateAndPrintDossards()">🖨️ Générer & Imprimer</button>
-    </div>
   </div>
 
   <div class="card">
     <div class="card-title">
-      <span>3. Liste des Élèves Inscrits</span>
-      <input type="text" id="searchStudent" placeholder="Filtrer nom ou classe..." oninput="renderStudentsTable()" style="padding:6px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.85rem;">
+      <span>Base active sur cet appareil</span>
+      <input type="text" id="searchStudent" placeholder="Rechercher nom ou classe..." oninput="renderStudentsTable()" style="padding:6px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.85rem;">
     </div>
     <div class="table-container">
       <table>
@@ -354,35 +298,29 @@
       </table>
     </div>
   </div>
-
 </div>
 
-<!-- Zone masquée d'impression -->
-<div id="printArea"></div>
-
 <script>
-// Base de données & catégorisation des niveaux
-let studentsDB = JSON.parse(localStorage.getItem('cross_students_db') || '[]');
+let studentsDB = JSON.parse(localStorage.getItem('cross_students_db') || 'null');
 let studentMap = new Map();
 
-function getNiveauFromDivision(div) {
-  if (!div) return "AUTRE";
-  const d = div.trim().toUpperCase();
-  if (/^(6[A-Z0-9]|6EME|6ÈME)/i.test(d)) return "6E";
-  if (/^(5[A-Z0-9]|5EME|5ÈME)/i.test(d)) return "5E";
-  if (/^(4[A-Z0-9]|4EME|4ÈME)/i.test(d)) return "4E";
-  if (/^(3[A-Z0-9]|3EME|3ÈME)/i.test(d)) return "3E";
+function inferNiveau(divStr) {
+  if (!divStr) return "CM2";
+  const d = String(divStr).trim().toUpperCase();
+  if (d.includes('6')) return "6E";
+  if (d.includes('5')) return "5E";
+  if (d.includes('4')) return "4E";
+  if (d.includes('3')) return "3E";
   return "CM2";
 }
 
 function rebuildMap() {
   studentMap.clear();
   studentsDB.forEach(s => {
-    s.niveau = getNiveauFromDivision(s.division);
+    s.niveau = inferNiveau(s.division || s.niveau);
     studentMap.set(String(s.Dossard), s);
   });
-  document.getElementById('studentTotalCount').textContent = `${studentsDB.length} élève(s)`;
-  updateClassDropdowns();
+  document.getElementById('tabCount').textContent = studentsDB.length;
   renderStudentsTable();
 }
 
@@ -399,7 +337,6 @@ function switchTab(tabId, btn) {
   if (tabId === 'resultsTab') renderLeaderboard();
 }
 
-// Multi-courses
 let races = JSON.parse(localStorage.getItem('cross_races_all') || '[]');
 let currentRaceId = localStorage.getItem('cross_current_race_id') || null;
 
@@ -412,8 +349,8 @@ function initRacesIfEmpty() {
   if (races.length === 0) {
     const firstRace = {
       id: 'race_' + Date.now(),
-      name: 'Course 1 (CM2 & 6èmes)',
-      levels: ['CM2', '6E'],
+      name: 'Course 1 (6èmes)',
+      levels: ['6E'],
       startTime: null,
       isFinished: false,
       arrives: []
@@ -456,11 +393,11 @@ function updateRaceSelectors() {
       badge.style.background = "#fee2e2";
       badge.style.color = "#b91c1c";
     } else if (curRace.startTime) {
-      badge.textContent = "Course en cours (Chrono actif)";
+      badge.textContent = "Chrono actif";
       badge.style.background = "#dcfce7";
       badge.style.color = "#15803d";
     } else {
-      badge.textContent = "En attente de départ";
+      badge.textContent = "En attente";
       badge.style.background = "#e2e8f0";
       badge.style.color = "#475569";
     }
@@ -468,13 +405,13 @@ function updateRaceSelectors() {
 }
 
 function startNewRacePrompt() {
-  const name = prompt("Nom de la nouvelle course (ex: Course 2 - 5èmes/4èmes) :", `Course ${races.length + 1}`);
+  const name = prompt("Nom de la course (ex: Course 2 - 5èmes) :", `Course ${races.length + 1}`);
   if (!name) return;
 
   const newRace = {
     id: 'race_' + Date.now(),
     name: name,
-    levels: ['6E'],
+    levels: ['5E'],
     startTime: null,
     isFinished: false,
     arrives: []
@@ -489,8 +426,7 @@ document.querySelectorAll('.level-chk').forEach(chk => {
   chk.addEventListener('change', () => {
     const curRace = getCurrentRace();
     if (!curRace) return;
-    const checked = Array.from(document.querySelectorAll('.level-chk:checked')).map(c => c.value);
-    curRace.levels = checked;
+    curRace.levels = Array.from(document.querySelectorAll('.level-chk:checked')).map(c => c.value);
     saveRaces();
   });
 });
@@ -503,11 +439,10 @@ document.getElementById('raceNameInput').addEventListener('change', (e) => {
   }
 });
 
-// Chrono officiel
 let timerInterval = null;
 let isRunning = false;
-
 let audioCtx = null;
+
 function initAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -579,7 +514,7 @@ function resetChronoDisplay() {
 
 function resetTimer() {
   const curRace = getCurrentRace();
-  if (!confirm(`Réinitialiser le chrono et effacer les arrivées de "${curRace ? curRace.name : 'cette course'}" ?`)) return;
+  if (!confirm(`Effacer les arrivées et réinitialiser le chrono de "${curRace ? curRace.name : 'cette course'}" ?`)) return;
   if (curRace) {
     curRace.startTime = null;
     curRace.isFinished = false;
@@ -592,14 +527,14 @@ function resetTimer() {
 function finishCurrentRace() {
   const curRace = getCurrentRace();
   if (!curRace) return;
-  if (!confirm(`Confirmer la clôture de "${curRace.name}" (${curRace.arrives.length} arrivants) ?`)) return;
+  if (!confirm(`Clôturer "${curRace.name}" (${curRace.arrives.length} arrivants) ?`)) return;
   curRace.isFinished = true;
   saveRaces();
   clearInterval(timerInterval);
   isRunning = false;
   document.getElementById('btnStart').textContent = "▶ Top Départ";
   document.getElementById('btnStart').className = "btn btn-success";
-  alert(`🏁 ${curRace.name} clôturée ! Résultats disponibles dans l'onglet Classements.`);
+  alert(`🏁 ${curRace.name} clôturée !`);
 }
 
 let lastScanText = null;
@@ -613,23 +548,19 @@ function registerArrival(dossardRaw) {
   if (dossardStr === lastScanText && (now - lastScanTime) < 3500) return;
 
   const curRace = getCurrentRace();
-  if (!curRace) {
-    alert("Aucune course active !");
-    return;
-  }
+  if (!curRace) return alert("Aucune course active !");
 
   if (curRace.arrives.some(a => a.dossard === dossardStr)) {
     playBeep(300, 0.25);
-    alert(`⚠️️ Le dossard #${dossardStr} a DÉJÀ franchi la ligne dans ${curRace.name} !`);
+    alert(`⚠️ Le dossard #${dossardStr} a DÉJÀ franchi la ligne dans ${curRace.name} !`);
     return;
   }
 
   const s = studentMap.get(dossardStr) || { Nom: "INCONNU", Prénom: "", division: "-", Sexe: "M", niveau: "AUTRE" };
 
-  if (curRace.levels && curRace.levels.length > 0 && !curRace.levels.includes(s.niveau)) {
-    playBeep(350, 0.3);
-    const continuer = confirm(`⚠️ ATTENTION : ${s.Nom} ${s.Prénom} est en ${s.division} (${s.niveau}), mais cette course est réservée à : [${curRace.levels.join(', ')}].\n\nEnregistrer quand même cette arrivée ?`);
-    if (!continuer) return;
+  const isHorsNiveau = (curRace.levels && curRace.levels.length > 0 && !curRace.levels.includes(s.niveau));
+  if (isHorsNiveau) {
+    playBeep(350, 0.25);
   }
 
   lastScanText = dossardStr;
@@ -663,7 +594,36 @@ function registerArrival(dossardRaw) {
   document.getElementById('lastScanPlace').textContent = `Place Scratch #${arrival.placeScratch} (Place ${arrival.sexe} #${arrival.placeSexe})`;
   document.getElementById('lastScanTime').textContent = arrival.tempsStr;
   document.getElementById('lastScanName').textContent = `${arrival.nom} ${arrival.prenom}`;
-  document.getElementById('lastScanMeta').textContent = `Classe : ${arrival.division} (${arrival.sexe}) — Dossard #${arrival.dossard}`;
+  document.getElementById('lastScanMeta').innerHTML = `Classe : <strong>${arrival.division}</strong> (${arrival.niveau} - ${arrival.sexe}) — Dossard #${arrival.dossard}` + (isHorsNiveau ? ' <span style="color:#dc2626; font-weight:bold;">⚠️ Hors niveau</span>' : '');
+}
+
+function handleDecodedQR(rawText) {
+  const text = String(rawText).trim();
+  if (!text) return;
+
+  if (/^\d+$/.test(text)) {
+    registerArrival(text);
+    return;
+  }
+
+  const matched = studentsDB.find(s => {
+    const sNom = (s.Nom || '').toUpperCase();
+    const sPrenom = (s.Prénom || '').toUpperCase();
+    const full = text.toUpperCase();
+    return full.includes(sNom) && full.includes(sPrenom);
+  });
+
+  if (matched) {
+    registerArrival(String(matched.Dossard));
+  } else {
+    const fallbackNum = text.replace(/[^0-9]/g, '');
+    if (fallbackNum && studentMap.has(fallbackNum)) {
+      registerArrival(fallbackNum);
+    } else {
+      playBeep(300, 0.25);
+      alert(`QR Code détecté mais élève non reconnu : "${text}"`);
+    }
+  }
 }
 
 function submitManual() {
@@ -676,7 +636,6 @@ function submitManual() {
   }
 }
 
-// Classements
 let currentSubTab = 'ALL';
 
 function switchSubTab(type) {
@@ -704,7 +663,7 @@ function renderLeaderboard() {
   if (currentSubTab === 'F') list = list.filter(a => a.sexe === 'F');
   if (currentSubTab === 'M') list = list.filter(a => a.sexe === 'M');
 
-  document.getElementById('leaderboardCount').textContent = `${list.length} arrivant(s) affiché(s)`;
+  document.getElementById('leaderboardCount').textContent = `${list.length} arrivant(s)`;
 
   list.forEach(item => {
     const tr = document.createElement('tr');
@@ -724,10 +683,8 @@ function renderLeaderboard() {
 function exportCurrentRaceCSV() {
   const raceId = document.getElementById('selectDisplayRace').value;
   const race = races.find(r => r.id === raceId);
-  if (!race || race.arrives.length === 0) {
-    alert("Aucune arrivée dans cette course !");
-    return;
-  }
+  if (!race || race.arrives.length === 0) return alert("Aucune arrivée dans cette course !");
+  
   let csv = "\uFEFFPlace_Scratch;Place_Sexe;Dossard;Nom;Prénom;Sexe;Classe;Niveau;Temps;Heure_Arrivee\n";
   race.arrives.forEach(a => {
     csv += `${a.placeScratch};${a.placeSexe};${a.dossard};"${a.nom}";"${a.prenom}";"${a.sexe}";"${a.division}";"${a.niveau}";"${a.tempsStr}";"${a.timestamp}"\n`;
@@ -736,10 +693,7 @@ function exportCurrentRaceCSV() {
 }
 
 function exportAllRacesCSV() {
-  if (races.length === 0) {
-    alert("Aucune course enregistrée !");
-    return;
-  }
+  if (races.length === 0) return alert("Aucune course enregistrée !");
   let csv = "\uFEFFCourse;Place_Scratch;Place_Sexe;Dossard;Nom;Prénom;Sexe;Classe;Niveau;Temps;Heure_Arrivee\n";
   races.forEach(r => {
     r.arrives.forEach(a => {
@@ -758,163 +712,6 @@ function downloadCSV(csv, filename) {
   a.click();
 }
 
-// Import CSV & Dossards
-function parseCSV(text) {
-  const lines = text.split(/\r\n|\n|\r/).filter(l => l.trim().length > 0);
-  if (lines.length < 2) return [];
-
-  const headerLine = lines[0];
-  let sep = ';';
-  if ((headerLine.match(/,/g) || []).length > (headerLine.match(/;/g) || []).length) sep = ',';
-  if ((headerLine.match(/\t/g) || []).length > (headerLine.match(/;/g) || []).length) sep = '\t';
-
-  const headers = headerLine.split(sep).map(h => h.trim().replace(/^["']|["']$/g, '').toLowerCase());
-
-  const idxNom = headers.findIndex(h => h.includes('nom'));
-  const idxPrenom = headers.findIndex(h => h.includes('prénom') || h.includes('prenom'));
-  const idxSexe = headers.findIndex(h => h.includes('sexe') || h.includes('genre'));
-  const idxDiv = headers.findIndex(h => h.includes('div') || h.includes('classe'));
-  const idxDos = headers.findIndex(h => h.includes('dossard') || h.includes('num'));
-
-  const parsed = [];
-  for (let i = 1; i < lines.length; i++) {
-    const row = lines[i].split(sep).map(col => col.trim().replace(/^["']|["']$/g, ''));
-    if (row.length <= 1) continue;
-
-    parsed.push({
-      Nom: (idxNom !== -1 ? row[idxNom] : (row[0] || '')),
-      Prénom: (idxPrenom !== -1 ? row[idxPrenom] : (row[1] || '')),
-      Sexe: (idxSexe !== -1 ? row[idxSexe].toUpperCase() : 'M'),
-      division: (idxDiv !== -1 ? row[idxDiv] : 'Non classé'),
-      Dossard: (idxDos !== -1 && parseInt(row[idxDos])) ? parseInt(row[idxDos]) : null
-    });
-  }
-
-  parsed.sort((a, b) => (a.division || '').localeCompare(b.division || '') || (a.Nom || '').localeCompare(b.Nom || ''));
-  parsed.forEach((item, index) => {
-    if (!item.Dossard) item.Dossard = index + 1;
-  });
-
-  return parsed;
-}
-
-function handleCSVUpload(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = function(evt) {
-    const records = parseCSV(evt.target.result);
-    if (records.length > 0) {
-      studentsDB = records;
-      saveStudents();
-      alert(`✅ ${records.length} élèves importés et classés par niveau avec succès !`);
-    }
-  };
-  reader.readAsText(file, "UTF-8");
-}
-
-function clearStudentsDB() {
-  if (confirm("Supprimer tous les élèves enregistrés ?")) {
-    studentsDB = [];
-    saveStudents();
-  }
-}
-
-function updateClassDropdowns() {
-  const select = document.getElementById('printClassFilter');
-  const cur = select.value;
-  select.innerHTML = '<option value="ALL">Toutes les classes</option>';
-  const divisions = [...new Set(studentsDB.map(s => s.division))].filter(Boolean).sort();
-  divisions.forEach(d => {
-    const count = studentsDB.filter(s => s.division === d).length;
-    const opt = document.createElement('option');
-    opt.value = d;
-    opt.textContent = `${d} (${count} élèves)`;
-    select.appendChild(opt);
-  });
-  select.value = divisions.includes(cur) ? cur : 'ALL';
-}
-
-function renderStudentsTable() {
-  const tbody = document.getElementById('studentsTableBody');
-  const search = document.getElementById('searchStudent').value.toLowerCase();
-  tbody.innerHTML = '';
-
-  const filtered = studentsDB.filter(s => 
-    (s.Nom || '').toLowerCase().includes(search) || 
-    (s.Prénom || '').toLowerCase().includes(search) || 
-    (s.division || '').toLowerCase().includes(search) ||
-    String(s.Dossard).includes(search)
-  );
-
-  filtered.slice(0, 100).forEach(s => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><span class="dos-pill">#${s.Dossard}</span></td>
-      <td><strong>${s.Nom}</strong> ${s.Prénom}</td>
-      <td><span class="gender-pill-${s.Sexe}">${s.Sexe}</span></td>
-      <td><strong>${s.niveau}</strong></td>
-      <td>${s.division}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-function generateAndPrintDossards() {
-  if (studentsDB.length === 0) {
-    alert("Veuillez d'abord importer des élèves !");
-    return;
-  }
-  const format = parseInt(document.getElementById('printFormatSelect').value);
-  const selectedClass = document.getElementById('printClassFilter').value;
-  const list = (selectedClass === 'ALL') ? studentsDB : studentsDB.filter(s => s.division === selectedClass);
-
-  const printArea = document.getElementById('printArea');
-  printArea.innerHTML = '';
-
-  let currentPage = null;
-  const gridClass = (format === 4) ? 'print-grid-4' : 'print-grid-2';
-
-  list.forEach((s, idx) => {
-    if (idx % format === 0) {
-      currentPage = document.createElement('div');
-      currentPage.className = gridClass;
-      printArea.appendChild(currentPage);
-    }
-
-    const card = document.createElement('div');
-    card.className = 'dossard-box';
-    card.innerHTML = `
-      <div class="dossard-top">
-        <span style="font-size:12px; text-transform:uppercase;">CROSS DU COLLÈGE</span>
-        <span style="background:#0f172a; color:#fff; padding:3px 8px; border-radius:5px; font-size:13px;">${s.division} (${s.niveau})</span>
-      </div>
-      <div class="dossard-main">
-        <div class="dossard-num">#${s.Dossard}</div>
-        <div id="print-qr-${s.Dossard}"></div>
-      </div>
-      <div class="dossard-bot">
-        <span>${s.Nom} ${s.Prénom}</span>
-        <span>${s.Sexe}</span>
-      </div>
-    `;
-    currentPage.appendChild(card);
-
-    new QRCode(card.querySelector(`#print-qr-${s.Dossard}`), {
-      text: String(s.Dossard),
-      width: (format === 4 ? 90 : 130),
-      height: (format === 4 ? 90 : 130),
-      colorDark: "#000000",
-      colorLight: "#ffffff",
-      correctLevel: QRCode.CorrectLevel.M
-    });
-  });
-
-  setTimeout(() => window.print(), 400);
-}
-
-// Caméra Mobile
 let html5QrCode = null;
 let isScanning = false;
 
@@ -949,29 +746,40 @@ async function startCameraManual() {
   if (isScanning && html5QrCode) {
     try { await html5QrCode.stop(); html5QrCode.clear(); } catch(e) {}
     isScanning = false;
-    toggleBtn.textContent = "📷 Démarrer";
+    toggleBtn.textContent = "📷 Démarrer Caméra";
     toggleBtn.className = "btn btn-primary";
     statusEl.textContent = "Caméra arrêtée.";
     return;
   }
 
-  statusEl.textContent = "Initialisation caméra...";
+  statusEl.textContent = "Démarrage caméra...";
 
   try {
     if (html5QrCode) {
       try { await html5QrCode.stop(); html5QrCode.clear(); } catch(e) {}
     }
-    html5QrCode = new Html5Qrcode("reader");
+
+    html5QrCode = new Html5Qrcode("reader", {
+      formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
+      verbose: false
+    });
 
     const select = document.getElementById('cameraSelect');
     const selectedId = select.value;
     const cameraConfig = selectedId ? { deviceId: { exact: selectedId } } : { facingMode: "environment" };
-    const scanConfig = { fps: 15, qrbox: { width: 230, height: 230 } };
+
+    const scanConfig = {
+      fps: 20,
+      qrbox: (viewWidth, viewHeight) => {
+        const minEdge = Math.min(viewWidth, viewHeight);
+        return { width: Math.floor(minEdge * 0.85), height: Math.floor(minEdge * 0.85) };
+      }
+    };
 
     await html5QrCode.start(
       cameraConfig,
       scanConfig,
-      (decodedText) => registerArrival(decodedText),
+      (decodedText) => handleDecodedQR(decodedText),
       () => {}
     );
 
@@ -983,26 +791,130 @@ async function startCameraManual() {
     if (select.options.length <= 1) loadCameras();
   } catch(err) {
     isScanning = false;
-    toggleBtn.textContent = "📷 Démarrer";
+    toggleBtn.textContent = "📷 Démarrer Caméra";
     toggleBtn.className = "btn btn-primary";
     statusEl.textContent = "Erreur caméra : " + (err.message || err);
   }
 }
 
-function loadDefaultTemplate() {
+function parseCSV(text) {
+  const lines = text.split(/\r\n|\n|\r/).filter(l => l.trim().length > 0);
+  if (lines.length < 2) return [];
+
+  const headerLine = lines[0];
+  let sep = ';';
+  if ((headerLine.match(/,/g) || []).length > (headerLine.match(/;/g) || []).length) sep = ',';
+  if ((headerLine.match(/\t/g) || []).length > (headerLine.match(/;/g) || []).length) sep = '\t';
+
+  const headers = headerLine.split(sep).map(h => h.trim().replace(/^["']|["']$/g, '').toLowerCase());
+
+  const idxNom = headers.findIndex(h => h.includes('nom'));
+  const idxPrenom = headers.findIndex(h => h.includes('prénom') || h.includes('prenom'));
+  const idxSexe = headers.findIndex(h => h.includes('sexe') || h.includes('genre'));
+  const idxNiveau = headers.findIndex(h => h.includes('niveau'));
+  const idxClasse = headers.findIndex(h => h.includes('classe') || h.includes('division'));
+  const idxDos = headers.findIndex(h => h.includes('dossard') || h.includes('num'));
+
+  const parsed = [];
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i].split(sep).map(col => col.trim().replace(/^["']|["']$/g, ''));
+    if (row.length <= 1) continue;
+
+    const rawNom = idxNom !== -1 ? row[idxNom] : (row[0] || '');
+    const rawPrenom = idxPrenom !== -1 ? row[idxPrenom] : (row[1] || '');
+    const rawSexe = idxSexe !== -1 ? row[idxSexe].toUpperCase().charAt(0) : 'M';
+    const rawClasse = idxClasse !== -1 ? row[idxClasse] : (idxNiveau !== -1 ? row[idxNiveau] : 'Non classé');
+    const rawNiveau = idxNiveau !== -1 ? row[idxNiveau] : rawClasse;
+    const rawDos = (idxDos !== -1 && parseInt(row[idxDos])) ? parseInt(row[idxDos]) : null;
+
+    parsed.push({
+      Nom: rawNom,
+      Prénom: rawPrenom,
+      Sexe: rawSexe === 'F' ? 'F' : 'M',
+      division: rawClasse,
+      niveau: inferNiveau(rawClasse || rawNiveau),
+      Dossard: rawDos
+    });
+  }
+
+  parsed.sort((a, b) => (a.division || '').localeCompare(b.division || '') || (a.Nom || '').localeCompare(b.Nom || ''));
+  parsed.forEach((item, index) => {
+    if (!item.Dossard) item.Dossard = index + 1;
+  });
+
+  return parsed;
+}
+
+function handleCSVUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    const buffer = evt.target.result;
+    let text = "";
+    try {
+      const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
+      text = utf8Decoder.decode(buffer);
+    } catch (err) {
+      const ansiDecoder = new TextDecoder('windows-1252');
+      text = ansiDecoder.decode(buffer);
+    }
+
+    const records = parseCSV(text);
+    if (records.length > 0) {
+      studentsDB = records;
+      saveStudents();
+      alert(`✅ ${records.length} élèves chargés avec succès !`);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function loadDefaultStudents() {
   fetch('eleves.json').then(r => r.json()).then(data => {
     studentsDB = data;
     saveStudents();
+    alert("421 élèves actuels rechargés !");
   }).catch(() => {
-    alert("Veuillez charger votre fichier CSV via le bouton ci-dessus.");
+    alert("Veuillez charger votre fichier CSV.");
+  });
+}
+
+function renderStudentsTable() {
+  const tbody = document.getElementById('studentsTableBody');
+  const search = document.getElementById('searchStudent').value.toLowerCase();
+  tbody.innerHTML = '';
+
+  const filtered = studentsDB.filter(s => 
+    (s.Nom || '').toLowerCase().includes(search) || 
+    (s.Prénom || '').toLowerCase().includes(search) || 
+    (s.division || '').toLowerCase().includes(search) ||
+    String(s.Dossard).includes(search)
+  );
+
+  filtered.slice(0, 100).forEach(s => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="dos-pill">#${s.Dossard}</span></td>
+      <td><strong>${s.Nom}</strong> ${s.Prénom}</td>
+      <td><span class="gender-pill-${s.Sexe}">${s.Sexe}</span></td>
+      <td><strong>${s.niveau}</strong></td>
+      <td>${s.division}</td>
+    `;
+    tbody.appendChild(tr);
   });
 }
 
 window.addEventListener('load', () => {
-  initRacesIfEmpty();
-  rebuildMap();
-  updateRaceSelectors();
-  
+  if (!studentsDB) {
+    loadDefaultStudents();
+  } else {
+    initRacesIfEmpty();
+    rebuildMap();
+    updateRaceSelectors();
+  }
+
   const curRace = getCurrentRace();
   if (curRace && curRace.startTime && !curRace.isFinished) {
     timerInterval = setInterval(updateDisplay, 100);
