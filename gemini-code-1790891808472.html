@@ -1,0 +1,1752 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Cross EPS — Poste d'Arrivée & Chrono</title>
+  
+  <!-- SDK Scanner QR -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <!-- SDK Firebase v9 (compat pour intégration HTML directe) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --warning: #d97706;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding-bottom: 60px; }
+
+    nav.app-nav {
+      background: #0f172a;
+      color: white;
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .nav-title { font-size: 1.1rem; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+    .nav-tabs { display: flex; gap: 6px; align-items: center; }
+    .nav-tab {
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid #334155;
+      padding: 7px 12px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .nav-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+    .cloud-badge {
+      font-size: 0.75rem;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: #064e3b;
+      color: #34d399;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .container { max-width: 900px; margin: auto; padding: 12px; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .btn {
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-success { background: var(--success); color: white; }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-outline { background: white; border: 1px solid #cbd5e1; color: var(--text); }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .level-pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+    .level-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: #f8fafc;
+    }
+    .level-label input { accent-color: var(--primary); }
+    .level-label:has(input:checked) {
+      border-color: var(--primary);
+      background: #eff6ff;
+      color: var(--primary);
+    }
+
+    .chrono-display {
+      font-size: 3rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: #0f172a;
+      text-align: center;
+      margin: 8px 0;
+    }
+    #reader { width: 100%; min-height: 220px; border-radius: 8px; overflow: hidden; background: #000; }
+
+    .last-scan-banner {
+      margin-top: 10px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: #ecfdf5;
+      border: 1.5px solid #10b981;
+      display: none;
+    }
+    .last-scan-banner.active { display: block; }
+    .manual-box { display: flex; gap: 8px; margin-top: 10px; }
+    .manual-box input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 0.95rem;
+    }
+
+    .sub-tabs { display: flex; gap: 6px; margin-bottom: 10px; border-bottom: 2px solid var(--border); padding-bottom: 6px; }
+    .sub-tab {
+      background: transparent;
+      border: none;
+      padding: 6px 12px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--muted);
+      cursor: pointer;
+      border-radius: 6px;
+    }
+    .sub-tab.active { background: #e2e8f0; color: #0f172a; }
+
+    .table-container { overflow-x: auto; max-height: 380px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #f1f5f9; }
+    th { background: #f8fafc; color: var(--muted); font-weight: 700; position: sticky; top: 0; }
+    .dos-pill { background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-weight: 800; }
+    .gender-pill-F { background: #fce7f3; color: #be185d; padding: 2px 6px; border-radius: 4px; font-weight: 800; }
+    .gender-pill-M { background: #e0e7ff; color: #3730a3; padding: 2px 6px; border-radius: 4px; font-weight: 800; }
+
+    /* Impression PDF */
+    #pdfPrintArea { display: none; }
+    @media print {
+      body { background: white !important; color: black !important; padding: 0 !important; }
+      nav.app-nav, .container { display: none !important; }
+      #pdfPrintArea { display: block !important; width: 100% !important; margin: 0 !important; padding: 10mm !important; }
+      @page { size: A4 portrait; margin: 8mm; }
+      .pdf-header { text-align: center; border-bottom: 2.5px solid #1e3a8a; padding-bottom: 8px; margin-bottom: 12px; }
+      .pdf-title { font-size: 20px; font-weight: 900; color: #1e3a8a; text-transform: uppercase; }
+      .pdf-meta { font-size: 13px; color: #475569; font-weight: 600; margin-top: 4px; }
+      .pdf-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 8px; }
+      .pdf-table th { background: #f1f5f9 !important; color: #0f172a; border-bottom: 1.5px solid #0f172a; padding: 6px 8px; font-weight: 800; text-transform: uppercase; }
+      .pdf-table td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; }
+      .pdf-table tr:nth-child(even) { background: #f8fafc !important; }
+      .pdf-table tr.podium-1 { font-weight: bold; background: #fef9c3 !important; }
+      .pdf-table tr.podium-2 { font-weight: bold; background: #f1f5f9 !important; }
+      .pdf-table tr.podium-3 { font-weight: bold; background: #ffedd5 !important; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="app-nav">
+  <div class="nav-title">
+    ⏱️ Cross EPS Arrivée
+    <span class="cloud-badge" id="cloudStatus">🟢 Cloud connecté</span>
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchTab('courseTab', this)">Course & Scan</button>
+    <button class="nav-tab" onclick="switchTab('resultsTab', this)">Classements</button>
+    <button class="nav-tab" onclick="switchTab('studentsTab', this)">Élèves (<span id="tabCount">0</span>)</button>
+  </div>
+</nav>
+
+<!-- 1. COURSE & SCAN -->
+<div class="container tab-content active" id="courseTab">
+  
+  <div class="card">
+    <div class="card-title">
+      <span>1. Départ & Niveaux</span>
+      <span class="badge" id="raceStatusBadge" style="font-size:0.8rem; background:#e2e8f0; padding:4px 8px; border-radius:6px;">En attente</span>
+    </div>
+    
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+      <label style="font-size:0.85rem; font-weight:700;">Course :</label>
+      <input type="text" id="raceNameInput" value="Course 1 (6èmes)" style="padding:6px 10px; border-radius:6px; border:1px solid #cbd5e1; font-weight:bold; font-size:0.9rem;">
+      <button class="btn btn-outline" onclick="startNewRacePrompt()">+ Nouvelle Course</button>
+    </div>
+
+    <div style="font-size:0.85rem; font-weight:700; margin-top:6px;">Niveaux autorisés :</div>
+    <div class="level-pills">
+      <label class="level-label"><input type="checkbox" value="CM2" class="level-chk"> CM2 (Écoles)</label>
+      <label class="level-label"><input type="checkbox" value="6E" class="level-chk" checked> 6èmes</label>
+      <label class="level-label"><input type="checkbox" value="5E" class="level-chk"> 5èmes</label>
+      <label class="level-label"><input type="checkbox" value="4E" class="level-chk"> 4èmes</label>
+      <label class="level-label"><input type="checkbox" value="3E" class="level-chk"> 3èmes</label>
+    </div>
+  </div>
+
+  <div class="card" style="text-align:center;">
+    <div class="chrono-display" id="chronoDisplay">00:00.0</div>
+    <div style="display:flex; gap:8px; justify-content:center;">
+      <button class="btn btn-success" id="btnStart" onclick="toggleTimer()">▶ Top Départ</button>
+      <button class="btn btn-danger" id="btnEndRace" onclick="finishCurrentRace()">🏁 Clôturer la Course</button>
+      <button class="btn btn-outline" onclick="resetTimer()">↺ Reset</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px;">
+      <select id="cameraSelect" style="flex:1; padding:8px; font-size:0.85rem; border-radius:6px; border:1px solid #cbd5e1;"></select>
+      <button class="btn btn-primary" id="btnCamToggle" onclick="startCameraManual()">📷 Démarrer Caméra</button>
+    </div>
+    <div id="reader"></div>
+    <div id="cameraStatus" style="font-size:0.85rem; color:#dc2626; margin-top:6px; font-weight:600;"></div>
+
+    <div class="manual-box">
+      <input type="text" id="manualInput" placeholder="N° dossard OU Nom Prénom..." onkeydown="if(event.key==='Enter') submitManual()">
+      <button class="btn btn-primary" onclick="submitManual()">Valider</button>
+    </div>
+
+    <div class="last-scan-banner" id="lastScanBanner">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span id="lastScanPlace" style="font-weight:bold; color:#047857;">Place Scratch #1</span>
+        <span id="lastScanTime" style="font-weight:bold; color:#047857;">00:00.0</span>
+      </div>
+      <div id="lastScanName" style="font-size:1.25rem; font-weight:800; color:#064e3b; margin-top:4px;">Nom Prénom</div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+        <div id="lastScanMeta" style="color:#047857; font-size:0.85rem;">Classe - Dossard # | Place Sexe</div>
+        <button id="btnCancelLastScan" class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" onclick="cancelLastScan()">Annuler ce scan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tableau des arrivées en direct sous le scanner -->
+  <div class="card">
+    <div class="card-title">
+      <span>Arrivées en direct (<span id="liveScanCount">0</span>)</span>
+      <div style="display:flex; gap:6px;">
+        <input type="text" id="quickDeleteArrivalInput" placeholder="N° dossard à annuler..." style="width:160px; padding:4px 8px; font-size:0.8rem; border:1px solid #cbd5e1; border-radius:6px;">
+        <button class="btn btn-danger" style="padding:4px 8px; font-size:0.8rem;" onclick="quickCancelArrival()">Supprimer</button>
+      </div>
+    </div>
+    <div class="table-container" style="max-height:260px;">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:36px;">Pl.</th>
+            <th style="width:50px;">Dos.</th>
+            <th>Nom Prénom</th>
+            <th>Classe</th>
+            <th>Temps</th>
+            <th style="text-align:right; width:80px;">Action</th>
+          </tr>
+        </thead>
+        <tbody id="liveResultsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- 2. CLASSEMENTS -->
+<div class="container tab-content" id="resultsTab">
+  <div class="card">
+    <div class="card-title">
+      <span>Course affichée :</span>
+      <select id="selectDisplayRace" onchange="renderLeaderboard()" style="padding:6px; border-radius:6px; border:1px solid #cbd5e1; font-weight:bold;"></select>
+    </div>
+    
+    <div class="sub-tabs">
+      <button class="sub-tab active" id="subTabAll" onclick="switchSubTab('ALL')">🏆 Scratch</button>
+      <button class="sub-tab" id="subTabF" onclick="switchSubTab('F')">👧 Filles</button>
+      <button class="sub-tab" id="subTabM" onclick="switchSubTab('M')">👦 Garçons</button>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <span style="font-size:0.85rem; color:var(--muted); font-weight:600;" id="leaderboardCount">0 arrivant(s)</span>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button class="btn btn-primary" style="font-size:0.8rem;" onclick="exportPDF('CURRENT')">📄 Exporter PDF (Course)</button>
+        <button class="btn btn-outline" style="font-size:0.8rem;" onclick="exportPDF('ALL')">📄 Exporter PDF (Tout)</button>
+        <button class="btn btn-outline" style="font-size:0.8rem;" onclick="exportCurrentRaceCSV()">📥 CSV</button>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Pl. Scratch</th>
+            <th>Pl. Sexe</th>
+            <th>Dos.</th>
+            <th>Nom Prénom</th>
+            <th>Sexe</th>
+            <th>Classe</th>
+            <th>Temps</th>
+            <th style="text-align:right;">Action</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboardBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 3. ÉLÈVES & IMPORT -->
+<div class="container tab-content" id="studentsTab">
+  <div class="card">
+    <div class="card-title">
+      <span>Mise à jour des Élèves (CSV)</span>
+      <button class="btn btn-outline" style="font-size:0.8rem;" onclick="loadDefaultStudents()">↺ Recharger les 421 élèves</button>
+    </div>
+    <div onclick="document.getElementById('csvFileInput').click()" style="border:2px dashed #2563eb; border-radius:8px; padding:18px; text-align:center; background:#eff6ff; cursor:pointer; margin-bottom:10px;">
+      <p style="font-weight:700; color:#1d4ed8;">📂 Cliquez pour importer un nouveau CSV sur cet appareil</p>
+      <p style="font-size:0.8rem; color:#64748b;">Gère UTF-8 et Windows-1252 (accents préservés)</p>
+      <input type="file" id="csvFileInput" style="display:none;" accept=".csv,text/csv" onchange="handleCSVUpload(event)">
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">
+      <span>Base active sur cet appareil</span>
+      <input type="text" id="searchStudent" placeholder="Rechercher nom ou classe..." oninput="renderStudentsTable()" style="padding:6px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.85rem;">
+    </div>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Dossard</th>
+            <th>Nom Prénom</th>
+            <th>Sexe</th>
+            <th>Niveau</th>
+            <th>Division</th>
+            <th style="text-align:right;">Action</th>
+          </tr>
+        </thead>
+        <tbody id="studentsTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="pdfPrintArea"></div>
+
+<script>
+// ==========================================
+// CONFIGURATION FIREBASE (Projet cross-75701)
+// ==========================================
+const firebaseConfig = {
+  apiKey: "AIzaSyAh1Rf4u6iSAdN81yX8yEgJ37VjAd9gOvI",
+  authDomain: "cross-75701.firebaseapp.com",
+  projectId: "cross-75701",
+  storageBucket: "cross-75701.firebasestorage.app",
+  messagingSenderId: "415446500180",
+  appId: "1:415446500180:web:316da849eec78abb9afec1"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Active le cache hors-ligne
+db.enablePersistence().catch((err) => {
+  console.warn("Persistance Firestore :", err.code);
+});
+
+// ==========================================
+// SYNCHRONISATION FIRESTORE
+// ==========================================
+function syncArrivalToFirestore(raceId, raceName, a) {
+  // 1. Course
+  db.collection("courses").doc(raceId).set({
+    nom: raceName,
+    derniereArrivee: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  // 2. Arrivée élève
+  db.collection("courses").doc(raceId).collection("arrives").doc(String(a.dossard)).set({
+    placeScratch: a.placeScratch,
+    placeSexe: a.placeSexe,
+    dossard: a.dossard,
+    nom: a.nom,
+    prenom: a.prenom,
+    classe: a.division,
+    niveau: a.niveau,
+    sexe: a.sexe,
+    tempsMs: a.tempsMs,
+    tempsStr: a.tempsStr,
+    timestamp: a.timestamp,
+    timestampServeur: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch((err) => {
+    console.error("Erreur Firestore :", err);
+  });
+}
+
+function deleteArrivalFromFirestore(raceId, dossardStr) {
+  db.collection("courses").doc(raceId).collection("arrives").doc(String(dossardStr)).delete().catch((err) => {
+    console.error("Erreur suppression Firestore :", err);
+  });
+}
+
+// Base par défaut
+const DEFAULT_STUDENTS = [
+  {"Dossard":1,"Nom":"Attoumani Desfarges","Prénom":"skinny","Sexe":"M","division":"Douzat","niveau":"CM2"},
+  {"Dossard":2,"Nom":"Capelle","Prénom":"elsa","Sexe":"F","division":"Douzat","niveau":"CM2"},
+  {"Dossard":3,"Nom":"Cotel","Prénom":"Enée","Sexe":"F","division":"Douzat","niveau":"CM2"},
+  {"Dossard":4,"Nom":"Cotel","Prénom":"Tia","Sexe":"F","division":"Douzat","niveau":"CM2"},
+  {"Dossard":5,"Nom":"Marquis","Prénom":"Leopold","Sexe":"M","division":"Douzat","niveau":"CM2"},
+  {"Dossard":6,"Nom":"Martin","Prénom":"Paul","Sexe":"M","division":"Douzat","niveau":"CM2"},
+  {"Dossard":7,"Nom":"Michelet","Prénom":"Mathéo","Sexe":"M","division":"Douzat","niveau":"CM2"},
+  {"Dossard":8,"Nom":"Bastard","Prénom":"Shana","Sexe":"F","division":"Genac","niveau":"CM2"},
+  {"Dossard":9,"Nom":"Charrassier","Prénom":"Emma","Sexe":"F","division":"Genac","niveau":"CM2"},
+  {"Dossard":10,"Nom":"Chauvet","Prénom":"Gabriel","Sexe":"M","division":"Genac","niveau":"CM2"},
+  {"Dossard":11,"Nom":"Fétis","Prénom":"Lana","Sexe":"F","division":"Genac","niveau":"CM2"},
+  {"Dossard":12,"Nom":"Kammoun","Prénom":"Rayan","Sexe":"M","division":"Genac","niveau":"CM2"},
+  {"Dossard":13,"Nom":"Marcos Baspeyras","Prénom":"Mathéo","Sexe":"M","division":"Genac","niveau":"CM2"},
+  {"Dossard":14,"Nom":"Maurin","Prénom":"Soan","Sexe":"M","division":"Genac","niveau":"CM2"},
+  {"Dossard":15,"Nom":"Raud","Prénom":"Yaël","Sexe":"F","division":"Genac","niveau":"CM2"},
+  {"Dossard":16,"Nom":"Rebeyrol","Prénom":"Djulian","Sexe":"M","division":"Genac","niveau":"CM2"},
+  {"Dossard":17,"Nom":"Rodière","Prénom":"Alyah","Sexe":"F","division":"Genac","niveau":"CM2"},
+  {"Dossard":18,"Nom":"Sucquet","Prénom":"Baptiste","Sexe":"M","division":"Genac","niveau":"CM2"},
+  {"Dossard":19,"Nom":"Julien","Prénom":"Clémence","Sexe":"F","division":"Gourville","niveau":"CM2"},
+  {"Dossard":20,"Nom":"Tessier","Prénom":"Nais","Sexe":"F","division":"Gourville","niveau":"CM2"},
+  {"Dossard":21,"Nom":"Varachaud","Prénom":"Luka","Sexe":"M","division":"Gourville","niveau":"CM2"},
+  {"Dossard":22,"Nom":"BENZAZON LOUY","Prénom":"Ethan","Sexe":"M","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":23,"Nom":"BLANLOEUIL","Prénom":"Yéléna","Sexe":"F","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":24,"Nom":"BROUCKAERT","Prénom":"Justine","Sexe":"F","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":25,"Nom":"Blay","Prénom":"Annah","Sexe":"F","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":26,"Nom":"CARAMIGEAS PAJEAU","Prénom":"Timéo","Sexe":"M","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":27,"Nom":"COMBEAUD","Prénom":"Mya","Sexe":"F","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":28,"Nom":"COUPAUD","Prénom":"Jade","Sexe":"F","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":29,"Nom":"FAUCHER MOUZAY","Prénom":"Capucine","Sexe":"F","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":30,"Nom":"FELIC","Prénom":"Mailyne","Sexe":"F","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":31,"Nom":"GUIONNET","Prénom":"Inaya","Sexe":"F","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":32,"Nom":"LAUTOUR","Prénom":"Axel","Sexe":"M","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":33,"Nom":"MANDART-VIGNAUD","Prénom":"Clémence","Sexe":"F","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":34,"Nom":"MERCIER","Prénom":"Noah","Sexe":"M","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":35,"Nom":"MOUSSET","Prénom":"Cléa","Sexe":"F","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":36,"Nom":"MÉNIELLE","Prénom":"Tiamo","Sexe":"M","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":37,"Nom":"PELLET DE SOUSA","Prénom":"Maelle","Sexe":"F","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":38,"Nom":"PERTHUISOT","Prénom":"Léa","Sexe":"F","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":39,"Nom":"XAYAKHOM","Prénom":"Elyna","Sexe":"F","division":"Rouillac","niveau":"CM2"},
+  {"Dossard":40,"Nom":"Blay","Prénom":"Elyna","Sexe":"F","division":"Saint Cybardeaux","niveau":"CM2"},
+  {"Dossard":41,"Nom":"Boulestier","Prénom":"Rafael","Sexe":"M","division":"Saint Cybardeaux","niveau":"CM2"},
+  {"Dossard":42,"Nom":"Fouchier Menard","Prénom":"Lise","Sexe":"F","division":"Saint Cybardeaux","niveau":"CM2"},
+  {"Dossard":43,"Nom":"Kirsher Martin","Prénom":"Théa","Sexe":"F","division":"Saint Cybardeaux","niveau":"CM2"},
+  {"Dossard":44,"Nom":"Renauld","Prénom":"Hailey","Sexe":"F","division":"Saint Cybardeaux","niveau":"CM2"},
+  {"Dossard":45,"Nom":"Roy","Prénom":"Jules","Sexe":"M","division":"Saint Cybardeaux","niveau":"CM2"},
+  {"Dossard":46,"Nom":"Rutault","Prénom":"Emelyne","Sexe":"F","division":"Saint Cybardeaux","niveau":"CM2"},
+  {"Dossard":47,"Nom":"Sauvaitre","Prénom":"Louna","Sexe":"F","division":"Saint Cybardeaux","niveau":"CM2"},
+  {"Dossard":48,"Nom":"Augrand","Prénom":"Enorah","Sexe":"F","division":"Saint Genis","niveau":"CM2"},
+  {"Dossard":49,"Nom":"Bertrand","Prénom":"Tessa","Sexe":"F","division":"Saint Genis","niveau":"CM2"},
+  {"Dossard":50,"Nom":"Breteau","Prénom":"Ksénia","Sexe":"F","division":"Saint Genis","niveau":"CM2"},
+  {"Dossard":51,"Nom":"Cobérac","Prénom":"Emma","Sexe":"F","division":"Saint Genis","niveau":"CM2"},
+  {"Dossard":52,"Nom":"Couto-Suaudeau","Prénom":"Nola","Sexe":"F","division":"Saint Genis","niveau":"CM2"},
+  {"Dossard":53,"Nom":"Gaudin Déloménie","Prénom":"Maé","Sexe":"M","division":"Saint Genis","niveau":"CM2"},
+  {"Dossard":54,"Nom":"Gorichon","Prénom":"Nolan","Sexe":"M","division":"Saint Genis","niveau":"CM2"},
+  {"Dossard":55,"Nom":"Hourdou-Beineix","Prénom":"Armand","Sexe":"M","division":"Saint Genis","niveau":"CM2"},
+  {"Dossard":56,"Nom":"Jury","Prénom":"Louis","Sexe":"M","division":"Saint Genis","niveau":"CM2"},
+  {"Dossard":57,"Nom":"Lagache","Prénom":"Margaux","Sexe":"F","division":"Saint Genis","niveau":"CM2"},
+  {"Dossard":58,"Nom":"Léonard","Prénom":"Margaux","Sexe":"F","division":"Saint Genis","niveau":"CM2"},
+  {"Dossard":59,"Nom":"Malavergne","Prénom":"Anaé","Sexe":"F","division":"Saint Genis","niveau":"CM2"},
+  {"Dossard":60,"Nom":"Marcle","Prénom":"Tayron","Sexe":"M","division":"Saint Genis","niveau":"CM2"},
+  {"Dossard":61,"Nom":"Morandière","Prénom":"Hana","Sexe":"F","division":"Saint Genis","niveau":"CM2"},
+  {"Dossard":62,"Nom":"Terrade","Prénom":"Bastien","Sexe":"M","division":"Saint Genis","niveau":"CM2"},
+  {"Dossard":63,"Nom":"ALFRED","Prénom":"Clara","Sexe":"F","division":"6A","niveau":"6E"},
+  {"Dossard":64,"Nom":"BESSE","Prénom":"Sacha","Sexe":"M","division":"6A","niveau":"6E"},
+  {"Dossard":65,"Nom":"BONNEMAIN","Prénom":"Chloé","Sexe":"F","division":"6A","niveau":"6E"},
+  {"Dossard":66,"Nom":"CREPIN","Prénom":"Tomy","Sexe":"M","division":"6A","niveau":"6E"},
+  {"Dossard":67,"Nom":"DUPUY","Prénom":"Maëlis","Sexe":"F","division":"6A","niveau":"6E"},
+  {"Dossard":68,"Nom":"EYSSARTIER","Prénom":"Mélanie","Sexe":"F","division":"6A","niveau":"6E"},
+  {"Dossard":69,"Nom":"FORT","Prénom":"Lylia","Sexe":"F","division":"6A","niveau":"6E"},
+  {"Dossard":70,"Nom":"FOSSIER","Prénom":"Nathan","Sexe":"M","division":"6A","niveau":"6E"},
+  {"Dossard":71,"Nom":"GUYONNET","Prénom":"Énoha","Sexe":"F","division":"6A","niveau":"6E"},
+  {"Dossard":72,"Nom":"HUET","Prénom":"Emma","Sexe":"F","division":"6A","niveau":"6E"},
+  {"Dossard":73,"Nom":"LAFAYE","Prénom":"Baptiste","Sexe":"M","division":"6A","niveau":"6E"},
+  {"Dossard":74,"Nom":"LEFEBVRE","Prénom":"Arthur","Sexe":"M","division":"6A","niveau":"6E"},
+  {"Dossard":75,"Nom":"LHOUMEAU ROY","Prénom":"Emma","Sexe":"F","division":"6A","niveau":"6E"},
+  {"Dossard":76,"Nom":"LOHAN","Prénom":"Adela","Sexe":"F","division":"6A","niveau":"6E"},
+  {"Dossard":77,"Nom":"PELTIER","Prénom":"Rose","Sexe":"F","division":"6A","niveau":"6E"},
+  {"Dossard":78,"Nom":"PICARD RIVAUD","Prénom":"Olivia","Sexe":"F","division":"6A","niveau":"6E"},
+  {"Dossard":79,"Nom":"PILLERON","Prénom":"Jules","Sexe":"M","division":"6A","niveau":"6E"},
+  {"Dossard":80,"Nom":"SEMAT","Prénom":"Eloïse","Sexe":"F","division":"6A","niveau":"6E"},
+  {"Dossard":81,"Nom":"SEMIOT","Prénom":"Maëlys","Sexe":"F","division":"6A","niveau":"6E"},
+  {"Dossard":82,"Nom":"SILVEIREDO","Prénom":"Hayden","Sexe":"F","division":"6A","niveau":"6E"},
+  {"Dossard":83,"Nom":"TOURON","Prénom":"Lucia","Sexe":"F","division":"6A","niveau":"6E"},
+  {"Dossard":84,"Nom":"WINTERSTEIN","Prénom":"Amélia","Sexe":"F","division":"6A","niveau":"6E"},
+  {"Dossard":85,"Nom":"AMIRAULT","Prénom":"Noémie","Sexe":"F","division":"6B","niveau":"6E"},
+  {"Dossard":86,"Nom":"AUDY","Prénom":"Nathan","Sexe":"M","division":"6B","niveau":"6E"},
+  {"Dossard":87,"Nom":"BUREAU","Prénom":"Mélie","Sexe":"F","division":"6B","niveau":"6E"},
+  {"Dossard":88,"Nom":"CAPELLE-GARCIN","Prénom":"Elwenn","Sexe":"M","division":"6B","niveau":"6E"},
+  {"Dossard":89,"Nom":"DA SILVA BELAIR","Prénom":"Joy","Sexe":"F","division":"6B","niveau":"6E"},
+  {"Dossard":90,"Nom":"DELAGE","Prénom":"Mila","Sexe":"F","division":"6B","niveau":"6E"},
+  {"Dossard":91,"Nom":"DUVERNOY LALONDE","Prénom":"Robin","Sexe":"M","division":"6B","niveau":"6E"},
+  {"Dossard":92,"Nom":"FAUCHER MOUZAY","Prénom":"Jules","Sexe":"M","division":"6B","niveau":"6E"},
+  {"Dossard":93,"Nom":"FAUCONNET","Prénom":"Romane","Sexe":"F","division":"6B","niveau":"6E"},
+  {"Dossard":94,"Nom":"FEDIERE TAURONI ESPELTA","Prénom":"Jarod","Sexe":"M","division":"6B","niveau":"6E"},
+  {"Dossard":95,"Nom":"FERNANDEZ","Prénom":"Soline","Sexe":"F","division":"6B","niveau":"6E"},
+  {"Dossard":96,"Nom":"FIDELE","Prénom":"Laura","Sexe":"F","division":"6B","niveau":"6E"},
+  {"Dossard":97,"Nom":"GABORIT","Prénom":"Simon","Sexe":"M","division":"6B","niveau":"6E"},
+  {"Dossard":98,"Nom":"KLEIN","Prénom":"Baptiste","Sexe":"M","division":"6B","niveau":"6E"},
+  {"Dossard":99,"Nom":"LOISEL BOUCHER","Prénom":"Tyméo","Sexe":"M","division":"6B","niveau":"6E"},
+  {"Dossard":100,"Nom":"LORIAUX","Prénom":"Lucas","Sexe":"M","division":"6B","niveau":"6E"},
+  {"Dossard":101,"Nom":"MARRY","Prénom":"Soline","Sexe":"F","division":"6B","niveau":"6E"},
+  {"Dossard":102,"Nom":"PETRUS","Prénom":"Luys","Sexe":"M","division":"6B","niveau":"6E"},
+  {"Dossard":103,"Nom":"PEUCH","Prénom":"Arya","Sexe":"F","division":"6B","niveau":"6E"},
+  {"Dossard":104,"Nom":"THIBIER","Prénom":"Chloé","Sexe":"F","division":"6B","niveau":"6E"},
+  {"Dossard":105,"Nom":"TRESTA","Prénom":"Margaux","Sexe":"F","division":"6B","niveau":"6E"},
+  {"Dossard":106,"Nom":"BORDERIE","Prénom":"Enaly","Sexe":"F","division":"6C","niveau":"6E"},
+  {"Dossard":107,"Nom":"BOUSTON","Prénom":"Paulyne","Sexe":"F","division":"6C","niveau":"6E"},
+  {"Dossard":108,"Nom":"CHAIBI-BOUTILLER","Prénom":"Wissam","Sexe":"M","division":"6C","niveau":"6E"},
+  {"Dossard":109,"Nom":"CHANTEREAU","Prénom":"Bella","Sexe":"F","division":"6C","niveau":"6E"},
+  {"Dossard":110,"Nom":"CHAUVET","Prénom":"Liam","Sexe":"M","division":"6C","niveau":"6E"},
+  {"Dossard":111,"Nom":"DUCLOUX CHABERNAUD","Prénom":"Keylian","Sexe":"M","division":"6C","niveau":"6E"},
+  {"Dossard":112,"Nom":"DUMAS","Prénom":"Morgan","Sexe":"M","division":"6C","niveau":"6E"},
+  {"Dossard":113,"Nom":"FAUSTIN","Prénom":"Aïdan","Sexe":"M","division":"6C","niveau":"6E"},
+  {"Dossard":114,"Nom":"FERREIRA","Prénom":"Lea","Sexe":"F","division":"6C","niveau":"6E"},
+  {"Dossard":115,"Nom":"GOUPILLAT","Prénom":"Elsa","Sexe":"F","division":"6C","niveau":"6E"},
+  {"Dossard":116,"Nom":"HILAIRE","Prénom":"Kym","Sexe":"F","division":"6C","niveau":"6E"},
+  {"Dossard":117,"Nom":"JARDIM DUARTE","Prénom":"Ali","Sexe":"M","division":"6C","niveau":"6E"},
+  {"Dossard":118,"Nom":"KLEIN","Prénom":"Melvyn","Sexe":"M","division":"6C","niveau":"6E"},
+  {"Dossard":119,"Nom":"LETOT-CAILLAUD","Prénom":"Théo","Sexe":"M","division":"6C","niveau":"6E"},
+  {"Dossard":120,"Nom":"NDIAYE CAMBEFORT","Prénom":"Eden","Sexe":"F","division":"6C","niveau":"6E"},
+  {"Dossard":121,"Nom":"RAFFIER","Prénom":"Lilou","Sexe":"F","division":"6C","niveau":"6E"},
+  {"Dossard":122,"Nom":"RAYBAUD","Prénom":"Maïly","Sexe":"F","division":"6C","niveau":"6E"},
+  {"Dossard":123,"Nom":"ROY","Prénom":"Emma","Sexe":"F","division":"6C","niveau":"6E"},
+  {"Dossard":124,"Nom":"ROY","Prénom":"Gabin","Sexe":"M","division":"6C","niveau":"6E"},
+  {"Dossard":125,"Nom":"SALA","Prénom":"Lennie","Sexe":"F","division":"6C","niveau":"6E"},
+  {"Dossard":126,"Nom":"SOUQUET","Prénom":"Ellyne","Sexe":"F","division":"6C","niveau":"6E"},
+  {"Dossard":127,"Nom":"TROUVÉ","Prénom":"Manon","Sexe":"F","division":"6C","niveau":"6E"},
+  {"Dossard":128,"Nom":"BERTHELOT","Prénom":"Lucie","Sexe":"F","division":"6D","niveau":"6E"},
+  {"Dossard":129,"Nom":"BOULESTIER TARDE","Prénom":"Jade","Sexe":"F","division":"6D","niveau":"6E"},
+  {"Dossard":130,"Nom":"CAILLON","Prénom":"Jessy","Sexe":"M","division":"6D","niveau":"6E"},
+  {"Dossard":131,"Nom":"CHARBONNIER","Prénom":"Eva","Sexe":"F","division":"6D","niveau":"6E"},
+  {"Dossard":132,"Nom":"DALIBARD","Prénom":"Louis","Sexe":"M","division":"6D","niveau":"6E"},
+  {"Dossard":133,"Nom":"DELASSAIRE","Prénom":"Anaëlle","Sexe":"F","division":"6D","niveau":"6E"},
+  {"Dossard":134,"Nom":"DUSSOUL","Prénom":"Nolann","Sexe":"M","division":"6D","niveau":"6E"},
+  {"Dossard":135,"Nom":"FOLANÉ","Prénom":"Eliot","Sexe":"M","division":"6D","niveau":"6E"},
+  {"Dossard":136,"Nom":"FOUCHIER","Prénom":"Mathis","Sexe":"M","division":"6D","niveau":"6E"},
+  {"Dossard":137,"Nom":"LACOURARIE","Prénom":"Cléa","Sexe":"F","division":"6D","niveau":"6E"},
+  {"Dossard":138,"Nom":"LAVAURE","Prénom":"Anaelle","Sexe":"F","division":"6D","niveau":"6E"},
+  {"Dossard":139,"Nom":"M'HAMED","Prénom":"Enya","Sexe":"F","division":"6D","niveau":"6E"},
+  {"Dossard":140,"Nom":"MAHAFALY","Prénom":"Tyah","Sexe":"F","division":"6D","niveau":"6E"},
+  {"Dossard":141,"Nom":"MARTONNAUD","Prénom":"Romane","Sexe":"F","division":"6D","niveau":"6E"},
+  {"Dossard":142,"Nom":"MERIEL","Prénom":"Elif","Sexe":"F","division":"6D","niveau":"6E"},
+  {"Dossard":143,"Nom":"MEUNIER","Prénom":"Clémentine","Sexe":"F","division":"6D","niveau":"6E"},
+  {"Dossard":144,"Nom":"MOREAU","Prénom":"Louis","Sexe":"M","division":"6D","niveau":"6E"},
+  {"Dossard":145,"Nom":"PONTEZIERES","Prénom":"Enzo","Sexe":"M","division":"6D","niveau":"6E"},
+  {"Dossard":146,"Nom":"ROY","Prénom":"Paul","Sexe":"M","division":"6D","niveau":"6E"},
+  {"Dossard":147,"Nom":"VASQUEZ BERTRAND","Prénom":"Leandro","Sexe":"M","division":"6D","niveau":"6E"},
+  {"Dossard":148,"Nom":"VIGREUX","Prénom":"Leïla","Sexe":"F","division":"6D","niveau":"6E"},
+  {"Dossard":149,"Nom":"AYRAULT","Prénom":"Matéo","Sexe":"M","division":"5A","niveau":"5E"},
+  {"Dossard":150,"Nom":"BARDY","Prénom":"Malo","Sexe":"M","division":"5A","niveau":"5E"},
+  {"Dossard":151,"Nom":"BOUVRY","Prénom":"Pauline","Sexe":"F","division":"5A","niveau":"5E"},
+  {"Dossard":152,"Nom":"CARTIER","Prénom":"Emilie","Sexe":"F","division":"5A","niveau":"5E"},
+  {"Dossard":153,"Nom":"COLOMBIER","Prénom":"Nolan","Sexe":"M","division":"5A","niveau":"5E"},
+  {"Dossard":154,"Nom":"COTEL","Prénom":"Phileas","Sexe":"M","division":"5A","niveau":"5E"},
+  {"Dossard":155,"Nom":"DAGNEAU","Prénom":"Emilie","Sexe":"F","division":"5A","niveau":"5E"},
+  {"Dossard":156,"Nom":"DEMESTRE CHEMINADE","Prénom":"Laly","Sexe":"F","division":"5A","niveau":"5E"},
+  {"Dossard":157,"Nom":"DUGUET LAVIGNE","Prénom":"Paolo","Sexe":"M","division":"5A","niveau":"5E"},
+  {"Dossard":158,"Nom":"FOUCHE","Prénom":"Alise","Sexe":"F","division":"5A","niveau":"5E"},
+  {"Dossard":159,"Nom":"GACHET","Prénom":"Victor","Sexe":"M","division":"5A","niveau":"5E"},
+  {"Dossard":160,"Nom":"GAUDUCHEAU","Prénom":"Gabriel","Sexe":"M","division":"5A","niveau":"5E"},
+  {"Dossard":161,"Nom":"GAUTHIER","Prénom":"Lou","Sexe":"F","division":"5A","niveau":"5E"},
+  {"Dossard":162,"Nom":"GAUTRAUD","Prénom":"Timéo","Sexe":"M","division":"5A","niveau":"5E"},
+  {"Dossard":163,"Nom":"GUERINEAU","Prénom":"Léana","Sexe":"F","division":"5A","niveau":"5E"},
+  {"Dossard":164,"Nom":"KHAYOUB","Prénom":"Adam","Sexe":"M","division":"5A","niveau":"5E"},
+  {"Dossard":165,"Nom":"LAOUARI","Prénom":"Mathis","Sexe":"M","division":"5A","niveau":"5E"},
+  {"Dossard":166,"Nom":"MAURY","Prénom":"Noam","Sexe":"M","division":"5A","niveau":"5E"},
+  {"Dossard":167,"Nom":"NICOLAS","Prénom":"Pierre-Ann","Sexe":"M","division":"5A","niveau":"5E"},
+  {"Dossard":168,"Nom":"ROBERT","Prénom":"Théo","Sexe":"M","division":"5A","niveau":"5E"},
+  {"Dossard":169,"Nom":"SOREL","Prénom":"Louis","Sexe":"M","division":"5A","niveau":"5E"},
+  {"Dossard":170,"Nom":"VEQUAUD","Prénom":"Celyan","Sexe":"M","division":"5A","niveau":"5E"},
+  {"Dossard":171,"Nom":"VIGNERON DUPRIEZ","Prénom":"Louis","Sexe":"M","division":"5A","niveau":"5E"},
+  {"Dossard":172,"Nom":"ATTOUMANI-DESFARGES","Prénom":"Kélyah","Sexe":"F","division":"5B","niveau":"5E"},
+  {"Dossard":173,"Nom":"BASSIÉRE","Prénom":"Lola","Sexe":"F","division":"5B","niveau":"5E"},
+  {"Dossard":174,"Nom":"BINEAU CONGE","Prénom":"Zoé","Sexe":"F","division":"5B","niveau":"5E"},
+  {"Dossard":175,"Nom":"BOUTON BOSSAVIT","Prénom":"Amandine","Sexe":"F","division":"5B","niveau":"5E"},
+  {"Dossard":176,"Nom":"CHARRASSIER","Prénom":"Pierre","Sexe":"M","division":"5B","niveau":"5E"},
+  {"Dossard":177,"Nom":"CHAUVREAU","Prénom":"Léna","Sexe":"F","division":"5B","niveau":"5E"},
+  {"Dossard":178,"Nom":"GORICHON","Prénom":"Romain","Sexe":"M","division":"5B","niveau":"5E"},
+  {"Dossard":179,"Nom":"GUICHARD-MATTON","Prénom":"Jarod","Sexe":"M","division":"5B","niveau":"5E"},
+  {"Dossard":180,"Nom":"JALLAGEAS","Prénom":"Victor","Sexe":"M","division":"5B","niveau":"5E"},
+  {"Dossard":181,"Nom":"KIRCHER CHEMINADE","Prénom":"Nolan","Sexe":"M","division":"5B","niveau":"5E"},
+  {"Dossard":182,"Nom":"LANDEAU","Prénom":"Emy","Sexe":"F","division":"5B","niveau":"5E"},
+  {"Dossard":183,"Nom":"LAURENT","Prénom":"Charly","Sexe":"M","division":"5B","niveau":"5E"},
+  {"Dossard":184,"Nom":"MALAVERGNE","Prénom":"Iloé","Sexe":"F","division":"5B","niveau":"5E"},
+  {"Dossard":185,"Nom":"MARCHAND","Prénom":"Emmy","Sexe":"F","division":"5B","niveau":"5E"},
+  {"Dossard":186,"Nom":"MARCOS BASPEYRAS","Prénom":"Lorenzo","Sexe":"M","division":"5B","niveau":"5E"},
+  {"Dossard":187,"Nom":"PERAUD COURAYER","Prénom":"Loulia","Sexe":"F","division":"5B","niveau":"5E"},
+  {"Dossard":188,"Nom":"RIBEREAU","Prénom":"Noélie","Sexe":"F","division":"5B","niveau":"5E"},
+  {"Dossard":189,"Nom":"RICHARD","Prénom":"Jules","Sexe":"M","division":"5B","niveau":"5E"},
+  {"Dossard":190,"Nom":"TALLON--MERCIER","Prénom":"Léa","Sexe":"F","division":"5B","niveau":"5E"},
+  {"Dossard":191,"Nom":"VAN ZELE","Prénom":"Yanis","Sexe":"M","division":"5B","niveau":"5E"},
+  {"Dossard":192,"Nom":"VASLIN","Prénom":"Ethan","Sexe":"M","division":"5B","niveau":"5E"},
+  {"Dossard":193,"Nom":"YACHOU MICHOT","Prénom":"Sofia","Sexe":"F","division":"5B","niveau":"5E"},
+  {"Dossard":194,"Nom":"AUDOUIT","Prénom":"Camille","Sexe":"F","division":"5C","niveau":"5E"},
+  {"Dossard":195,"Nom":"BIBAUD","Prénom":"Lyam","Sexe":"M","division":"5C","niveau":"5E"},
+  {"Dossard":196,"Nom":"BLAY","Prénom":"Alycia","Sexe":"F","division":"5C","niveau":"5E"},
+  {"Dossard":197,"Nom":"BRIMEUR","Prénom":"Abigaël","Sexe":"F","division":"5C","niveau":"5E"},
+  {"Dossard":198,"Nom":"BRISSON","Prénom":"Ylan","Sexe":"M","division":"5C","niveau":"5E"},
+  {"Dossard":199,"Nom":"EPOUPA MALOBÉ","Prénom":"Louis-Gabriel","Sexe":"M","division":"5C","niveau":"5E"},
+  {"Dossard":200,"Nom":"GIRY","Prénom":"Flavien","Sexe":"M","division":"5C","niveau":"5E"},
+  {"Dossard":201,"Nom":"GRELET","Prénom":"Adam","Sexe":"M","division":"5C","niveau":"5E"},
+  {"Dossard":202,"Nom":"HUGUET","Prénom":"Noé","Sexe":"M","division":"5C","niveau":"5E"},
+  {"Dossard":203,"Nom":"JUNCA BILSKI","Prénom":"Liwia","Sexe":"F","division":"5C","niveau":"5E"},
+  {"Dossard":204,"Nom":"LALIDA ALEXIS","Prénom":"Ambre","Sexe":"F","division":"5C","niveau":"5E"},
+  {"Dossard":205,"Nom":"LIEUTAUD","Prénom":"Baptiste","Sexe":"M","division":"5C","niveau":"5E"},
+  {"Dossard":206,"Nom":"MALLET","Prénom":"Lucas","Sexe":"M","division":"5C","niveau":"5E"},
+  {"Dossard":207,"Nom":"MELIOT","Prénom":"Soan","Sexe":"M","division":"5C","niveau":"5E"},
+  {"Dossard":208,"Nom":"MENARD ROULET","Prénom":"Hugo","Sexe":"M","division":"5C","niveau":"5E"},
+  {"Dossard":209,"Nom":"MENEGHINI","Prénom":"Louna","Sexe":"F","division":"5C","niveau":"5E"},
+  {"Dossard":210,"Nom":"PERISSAT","Prénom":"Loïs","Sexe":"M","division":"5C","niveau":"5E"},
+  {"Dossard":211,"Nom":"PLOQUIN","Prénom":"Abel","Sexe":"M","division":"5C","niveau":"5E"},
+  {"Dossard":212,"Nom":"ROUSSELIERE","Prénom":"Indians","Sexe":"M","division":"5C","niveau":"5E"},
+  {"Dossard":213,"Nom":"SELLEZ","Prénom":"Noé","Sexe":"M","division":"5C","niveau":"5E"},
+  {"Dossard":214,"Nom":"STEINBACH","Prénom":"Shauna","Sexe":"F","division":"5C","niveau":"5E"},
+  {"Dossard":215,"Nom":"BAJOT DILANGE","Prénom":"Elyna","Sexe":"F","division":"5D","niveau":"5E"},
+  {"Dossard":216,"Nom":"BARBARI ROTURIER","Prénom":"Lucas","Sexe":"M","division":"5D","niveau":"5E"},
+  {"Dossard":217,"Nom":"BONNET","Prénom":"Mily","Sexe":"F","division":"5D","niveau":"5E"},
+  {"Dossard":218,"Nom":"CHAUVET","Prénom":"Enoha","Sexe":"M","division":"5D","niveau":"5E"},
+  {"Dossard":219,"Nom":"CHETANEAU","Prénom":"Zoe","Sexe":"F","division":"5D","niveau":"5E"},
+  {"Dossard":220,"Nom":"CHRISTOFLOUR","Prénom":"Simon","Sexe":"M","division":"5D","niveau":"5E"},
+  {"Dossard":221,"Nom":"DESORMEAUX","Prénom":"Joëlia","Sexe":"F","division":"5D","niveau":"5E"},
+  {"Dossard":222,"Nom":"DUCHAZEAUBENEIX","Prénom":"Dorianne","Sexe":"F","division":"5D","niveau":"5E"},
+  {"Dossard":223,"Nom":"GAUTHIER","Prénom":"Robin","Sexe":"M","division":"5D","niveau":"5E"},
+  {"Dossard":224,"Nom":"GIBAUD","Prénom":"Esteban","Sexe":"M","division":"5D","niveau":"5E"},
+  {"Dossard":225,"Nom":"LAGACHE","Prénom":"Théo","Sexe":"M","division":"5D","niveau":"5E"},
+  {"Dossard":226,"Nom":"LAMAILLE","Prénom":"Farès","Sexe":"M","division":"5D","niveau":"5E"},
+  {"Dossard":227,"Nom":"LAUER","Prénom":"Gaëtan","Sexe":"M","division":"5D","niveau":"5E"},
+  {"Dossard":228,"Nom":"MARCHESSEAU","Prénom":"Léna","Sexe":"F","division":"5D","niveau":"5E"},
+  {"Dossard":229,"Nom":"MENARD","Prénom":"Nathan","Sexe":"M","division":"5D","niveau":"5E"},
+  {"Dossard":230,"Nom":"MERCERON","Prénom":"Clément","Sexe":"M","division":"5D","niveau":"5E"},
+  {"Dossard":231,"Nom":"MORINEAU","Prénom":"Thylio","Sexe":"M","division":"5D","niveau":"5E"},
+  {"Dossard":232,"Nom":"PINSET","Prénom":"Charles","Sexe":"M","division":"5D","niveau":"5E"},
+  {"Dossard":233,"Nom":"RAYE PELLETIER","Prénom":"Elyse","Sexe":"F","division":"5D","niveau":"5E"},
+  {"Dossard":234,"Nom":"SUCQUET","Prénom":"Hugo","Sexe":"M","division":"5D","niveau":"5E"},
+  {"Dossard":235,"Nom":"SURBIER","Prénom":"Hugo","Sexe":"M","division":"5D","niveau":"5E"},
+  {"Dossard":236,"Nom":"TRUFFANDIER","Prénom":"Enola","Sexe":"F","division":"5D","niveau":"5E"},
+  {"Dossard":237,"Nom":"BRUNET","Prénom":"Enzo","Sexe":"M","division":"4A","niveau":"4E"},
+  {"Dossard":238,"Nom":"CHANTEREAU","Prénom":"Ambre","Sexe":"F","division":"4A","niveau":"4E"},
+  {"Dossard":239,"Nom":"DEMESTRE CHEMINADE","Prénom":"Yavin","Sexe":"M","division":"4A","niveau":"4E"},
+  {"Dossard":240,"Nom":"DESMAY","Prénom":"Léo","Sexe":"M","division":"4A","niveau":"4E"},
+  {"Dossard":241,"Nom":"DION","Prénom":"Julie","Sexe":"F","division":"4A","niveau":"4E"},
+  {"Dossard":242,"Nom":"DION","Prénom":"Léa","Sexe":"F","division":"4A","niveau":"4E"},
+  {"Dossard":243,"Nom":"ELIE--BONNENFANT","Prénom":"Mélody","Sexe":"F","division":"4A","niveau":"4E"},
+  {"Dossard":244,"Nom":"FORESTIER","Prénom":"Jade","Sexe":"F","division":"4A","niveau":"4E"},
+  {"Dossard":245,"Nom":"FOUCHIER","Prénom":"Axel","Sexe":"M","division":"4A","niveau":"4E"},
+  {"Dossard":246,"Nom":"HILAIRE","Prénom":"Ina","Sexe":"F","division":"4A","niveau":"4E"},
+  {"Dossard":247,"Nom":"IRRMANN","Prénom":"Iloan","Sexe":"M","division":"4A","niveau":"4E"},
+  {"Dossard":248,"Nom":"JUGIEAU","Prénom":"Loanne","Sexe":"F","division":"4A","niveau":"4E"},
+  {"Dossard":249,"Nom":"LAVAUD","Prénom":"Lylou","Sexe":"F","division":"4A","niveau":"4E"},
+  {"Dossard":250,"Nom":"LEPAULARD","Prénom":"Mahé","Sexe":"M","division":"4A","niveau":"4E"},
+  {"Dossard":251,"Nom":"LETANG","Prénom":"Nicolas","Sexe":"M","division":"4A","niveau":"4E"},
+  {"Dossard":252,"Nom":"MEGE BOND","Prénom":"Callen","Sexe":"M","division":"4A","niveau":"4E"},
+  {"Dossard":253,"Nom":"MERCIER","Prénom":"Christiano","Sexe":"M","division":"4A","niveau":"4E"},
+  {"Dossard":254,"Nom":"MEUNIER","Prénom":"Nolan","Sexe":"M","division":"4A","niveau":"4E"},
+  {"Dossard":255,"Nom":"MOREAU","Prénom":"Giulia","Sexe":"F","division":"4A","niveau":"4E"},
+  {"Dossard":256,"Nom":"PASCAUD","Prénom":"Simon","Sexe":"M","division":"4A","niveau":"4E"},
+  {"Dossard":257,"Nom":"PÉRÉ","Prénom":"Nolan","Sexe":"M","division":"4A","niveau":"4E"},
+  {"Dossard":258,"Nom":"RAYMOND-MEUNIER","Prénom":"Perine","Sexe":"F","division":"4A","niveau":"4E"},
+  {"Dossard":259,"Nom":"SALA","Prénom":"Naomi","Sexe":"F","division":"4A","niveau":"4E"},
+  {"Dossard":260,"Nom":"SANCHEZ","Prénom":"Tyago","Sexe":"M","division":"4A","niveau":"4E"},
+  {"Dossard":261,"Nom":"TROUVE","Prénom":"Paul","Sexe":"M","division":"4A","niveau":"4E"},
+  {"Dossard":262,"Nom":"VIMPERE","Prénom":"Antonin","Sexe":"M","division":"4A","niveau":"4E"},
+  {"Dossard":263,"Nom":"AGADICHE","Prénom":"Mattéo","Sexe":"M","division":"4B","niveau":"4E"},
+  {"Dossard":264,"Nom":"AUDUBERTEAU","Prénom":"Kelya","Sexe":"F","division":"4B","niveau":"4E"},
+  {"Dossard":265,"Nom":"BARRI","Prénom":"Mélyne","Sexe":"F","division":"4B","niveau":"4E"},
+  {"Dossard":266,"Nom":"BILLAUD","Prénom":"Margaux","Sexe":"F","division":"4B","niveau":"4E"},
+  {"Dossard":267,"Nom":"CAPELLE","Prénom":"Louise","Sexe":"F","division":"4B","niveau":"4E"},
+  {"Dossard":268,"Nom":"CATINEAU","Prénom":"Noé","Sexe":"M","division":"4B","niveau":"4E"},
+  {"Dossard":269,"Nom":"CAVARD","Prénom":"Ambre","Sexe":"F","division":"4B","niveau":"4E"},
+  {"Dossard":270,"Nom":"CORDIER","Prénom":"Mathéo","Sexe":"M","division":"4B","niveau":"4E"},
+  {"Dossard":271,"Nom":"CRUZ RUIVO","Prénom":"David","Sexe":"M","division":"4B","niveau":"4E"},
+  {"Dossard":272,"Nom":"DAVOUST","Prénom":"Axel","Sexe":"M","division":"4B","niveau":"4E"},
+  {"Dossard":273,"Nom":"DUVERGÉ","Prénom":"Mélissa","Sexe":"F","division":"4B","niveau":"4E"},
+  {"Dossard":274,"Nom":"FUSEAU-BARBARIN","Prénom":"Timéo","Sexe":"M","division":"4B","niveau":"4E"},
+  {"Dossard":275,"Nom":"GONCALVES","Prénom":"Soan","Sexe":"M","division":"4B","niveau":"4E"},
+  {"Dossard":276,"Nom":"HENRIQUE CHARLES","Prénom":"Arizona","Sexe":"F","division":"4B","niveau":"4E"},
+  {"Dossard":277,"Nom":"JOUMIER","Prénom":"Océane","Sexe":"F","division":"4B","niveau":"4E"},
+  {"Dossard":278,"Nom":"LAFOND","Prénom":"Arsène","Sexe":"M","division":"4B","niveau":"4E"},
+  {"Dossard":279,"Nom":"LEONARD","Prénom":"Sacha","Sexe":"M","division":"4B","niveau":"4E"},
+  {"Dossard":280,"Nom":"MARQUIS","Prénom":"Héloïse","Sexe":"F","division":"4B","niveau":"4E"},
+  {"Dossard":281,"Nom":"MAYES","Prénom":"Jessica","Sexe":"F","division":"4B","niveau":"4E"},
+  {"Dossard":282,"Nom":"MICHAUD","Prénom":"Mya","Sexe":"F","division":"4B","niveau":"4E"},
+  {"Dossard":283,"Nom":"PIOFFRET","Prénom":"Adel","Sexe":"M","division":"4B","niveau":"4E"},
+  {"Dossard":284,"Nom":"THOMAS","Prénom":"Hugo","Sexe":"M","division":"4B","niveau":"4E"},
+  {"Dossard":285,"Nom":"THOMAS","Prénom":"Jules","Sexe":"M","division":"4B","niveau":"4E"},
+  {"Dossard":286,"Nom":"TRICOCHE","Prénom":"Maëlie","Sexe":"F","division":"4B","niveau":"4E"},
+  {"Dossard":287,"Nom":"VANCAUWEMBERG","Prénom":"Louis","Sexe":"M","division":"4B","niveau":"4E"},
+  {"Dossard":288,"Nom":"AUTIN-RODIER","Prénom":"Pauline","Sexe":"F","division":"4C","niveau":"4E"},
+  {"Dossard":289,"Nom":"BARRET","Prénom":"Leïla","Sexe":"F","division":"4C","niveau":"4E"},
+  {"Dossard":290,"Nom":"BOUJU JAZON","Prénom":"Meylee","Sexe":"F","division":"4C","niveau":"4E"},
+  {"Dossard":291,"Nom":"CAILLAUD","Prénom":"Timéo","Sexe":"M","division":"4C","niveau":"4E"},
+  {"Dossard":292,"Nom":"CHORRO","Prénom":"Arwen","Sexe":"F","division":"4C","niveau":"4E"},
+  {"Dossard":293,"Nom":"FENIOU LEQUEUX","Prénom":"Aurianne","Sexe":"F","division":"4C","niveau":"4E"},
+  {"Dossard":294,"Nom":"FRADIN","Prénom":"Clémence","Sexe":"F","division":"4C","niveau":"4E"},
+  {"Dossard":295,"Nom":"GENDRE","Prénom":"Loan","Sexe":"M","division":"4C","niveau":"4E"},
+  {"Dossard":296,"Nom":"GRAMMATICO","Prénom":"Augustin","Sexe":"M","division":"4C","niveau":"4E"},
+  {"Dossard":297,"Nom":"GRANET","Prénom":"Diego","Sexe":"M","division":"4C","niveau":"4E"},
+  {"Dossard":298,"Nom":"HEREAU","Prénom":"Océane","Sexe":"F","division":"4C","niveau":"4E"},
+  {"Dossard":299,"Nom":"LACOURARIE","Prénom":"Lila","Sexe":"F","division":"4C","niveau":"4E"},
+  {"Dossard":300,"Nom":"LAMBERT","Prénom":"Charly","Sexe":"M","division":"4C","niveau":"4E"},
+  {"Dossard":301,"Nom":"LEMBERT","Prénom":"Agathe","Sexe":"F","division":"4C","niveau":"4E"},
+  {"Dossard":302,"Nom":"LINARD","Prénom":"Timéo","Sexe":"M","division":"4C","niveau":"4E"},
+  {"Dossard":303,"Nom":"MAILLOUX","Prénom":"Matteo","Sexe":"M","division":"4C","niveau":"4E"},
+  {"Dossard":304,"Nom":"MARGELU","Prénom":"Gabriela","Sexe":"F","division":"4C","niveau":"4E"},
+  {"Dossard":305,"Nom":"MESNARD","Prénom":"Anna","Sexe":"F","division":"4C","niveau":"4E"},
+  {"Dossard":306,"Nom":"NICOLAS","Prénom":"Elise","Sexe":"F","division":"4C","niveau":"4E"},
+  {"Dossard":307,"Nom":"NOYAU","Prénom":"Malia","Sexe":"F","division":"4C","niveau":"4E"},
+  {"Dossard":308,"Nom":"POT","Prénom":"Arthur","Sexe":"M","division":"4C","niveau":"4E"},
+  {"Dossard":309,"Nom":"RIBBO","Prénom":"Lise","Sexe":"F","division":"4C","niveau":"4E"},
+  {"Dossard":310,"Nom":"SERPEAU","Prénom":"Ethan","Sexe":"M","division":"4C","niveau":"4E"},
+  {"Dossard":311,"Nom":"THOREAU","Prénom":"Nolan","Sexe":"M","division":"4C","niveau":"4E"},
+  {"Dossard":312,"Nom":"AUGRAND","Prénom":"Aëlya","Sexe":"F","division":"4D","niveau":"4E"},
+  {"Dossard":313,"Nom":"AUTIN- RODIER","Prénom":"Constance","Sexe":"F","division":"4D","niveau":"4E"},
+  {"Dossard":314,"Nom":"BLANLOEUIL","Prénom":"Tahys","Sexe":"M","division":"4D","niveau":"4E"},
+  {"Dossard":315,"Nom":"BOISDET","Prénom":"Thomas","Sexe":"M","division":"4D","niveau":"4E"},
+  {"Dossard":316,"Nom":"BOURLOTON","Prénom":"Kylie","Sexe":"F","division":"4D","niveau":"4E"},
+  {"Dossard":317,"Nom":"COBERAC","Prénom":"Arthur","Sexe":"M","division":"4D","niveau":"4E"},
+  {"Dossard":318,"Nom":"DA SILVA--ROUGIER","Prénom":"Livia","Sexe":"F","division":"4D","niveau":"4E"},
+  {"Dossard":319,"Nom":"DELAHAYE","Prénom":"Tim","Sexe":"M","division":"4D","niveau":"4E"},
+  {"Dossard":320,"Nom":"DENICOUR","Prénom":"Alecia","Sexe":"F","division":"4D","niveau":"4E"},
+  {"Dossard":321,"Nom":"DENICOUR","Prénom":"Myla","Sexe":"F","division":"4D","niveau":"4E"},
+  {"Dossard":322,"Nom":"DEVAUX","Prénom":"Emilia","Sexe":"F","division":"4D","niveau":"4E"},
+  {"Dossard":323,"Nom":"DUVERNOY-- LALONDE","Prénom":"Maxence","Sexe":"M","division":"4D","niveau":"4E"},
+  {"Dossard":324,"Nom":"GOUPILLAT","Prénom":"Lucie","Sexe":"F","division":"4D","niveau":"4E"},
+  {"Dossard":325,"Nom":"HAULBERT","Prénom":"Lylou","Sexe":"F","division":"4D","niveau":"4E"},
+  {"Dossard":326,"Nom":"LAFONT","Prénom":"Lana","Sexe":"F","division":"4D","niveau":"4E"},
+  {"Dossard":327,"Nom":"LEROUX CHARFALLOT","Prénom":"Eléna","Sexe":"F","division":"4D","niveau":"4E"},
+  {"Dossard":328,"Nom":"MARTINEAU","Prénom":"Loghan","Sexe":"M","division":"4D","niveau":"4E"},
+  {"Dossard":329,"Nom":"MICHEL","Prénom":"Axel","Sexe":"M","division":"4D","niveau":"4E"},
+  {"Dossard":330,"Nom":"MORICHON","Prénom":"Charlie","Sexe":"F","division":"4D","niveau":"4E"},
+  {"Dossard":331,"Nom":"PARANTAUD","Prénom":"Sarah","Sexe":"F","division":"4D","niveau":"4E"},
+  {"Dossard":332,"Nom":"PERONNEAU","Jules":null,"Prénom":"Jules","Sexe":"M","division":"4D","niveau":"4E"},
+  {"Dossard":333,"Nom":"PILOT FIREK","Prénom":"Léana","Sexe":"F","division":"4D","niveau":"4E"},
+  {"Dossard":334,"Nom":"RASSAT MARTIN","Prénom":"Tom","Sexe":"M","division":"4D","niveau":"4E"},
+  {"Dossard":335,"Nom":"SABATIER","Prénom":"Enzo","Sexe":"M","division":"4D","niveau":"4E"},
+  {"Dossard":336,"Nom":"VOISIN","Prénom":"Paul","Sexe":"M","division":"4D","niveau":"4E"},
+  {"Dossard":337,"Nom":"WINTERSTEIN","Prénom":"Ethan","Sexe":"M","division":"4D","niveau":"4E"},
+  {"Dossard":338,"Nom":"AMIRAULT","Prénom":"Evann","Sexe":"M","division":"3A","niveau":"3E"},
+  {"Dossard":339,"Nom":"BACHELIER","Prénom":"Maëna","Sexe":"F","division":"3A","niveau":"3E"},
+  {"Dossard":340,"Nom":"BOULESTIER","Prénom":"Sarah","Sexe":"F","division":"3A","niveau":"3E"},
+  {"Dossard":341,"Nom":"BOUREAU","Prénom":"Noémie","Sexe":"F","division":"3A","niveau":"3E"},
+  {"Dossard":342,"Nom":"BUREAU","Prénom":"Nohan","Sexe":"M","division":"3A","niveau":"3E"},
+  {"Dossard":343,"Nom":"CHESNEAU","Prénom":"Izia","Sexe":"F","division":"3A","niveau":"3E"},
+  {"Dossard":344,"Nom":"DALIBARD","Prénom":"Marie","Sexe":"F","division":"3A","niveau":"3E"},
+  {"Dossard":345,"Nom":"DAVOULT--MILLET","Prénom":"Ange","Sexe":"M","division":"3A","niveau":"3E"},
+  {"Dossard":346,"Nom":"DE FREITAS","Prénom":"Rachel","Sexe":"F","division":"3A","niveau":"3E"},
+  {"Dossard":347,"Nom":"DERACHE","Prénom":"Lucy","Sexe":"F","division":"3A","niveau":"3E"},
+  {"Dossard":348,"Nom":"DOS REIS RODRIGUES","Prénom":"Olivia","Sexe":"F","division":"3A","niveau":"3E"},
+  {"Dossard":349,"Nom":"JUNCA-BILSKI","Prénom":"Poëma","Sexe":"F","division":"3A","niveau":"3E"},
+  {"Dossard":350,"Nom":"KREBS","Prénom":"Manon","Sexe":"F","division":"3A","niveau":"3E"},
+  {"Dossard":351,"Nom":"LAFOND-BOURDEAUX","Prénom":"Lisa","Sexe":"F","division":"3A","niveau":"3E"},
+  {"Dossard":352,"Nom":"LARRIESTE","Prénom":"Aliénor","Sexe":"F","division":"3A","niveau":"3E"},
+  {"Dossard":353,"Nom":"LEVACHÉ","Prénom":"Zélie","Sexe":"F","division":"3A","niveau":"3E"},
+  {"Dossard":354,"Nom":"MAGNIER","Prénom":"Charlotte","Sexe":"F","division":"3A","niveau":"3E"},
+  {"Dossard":355,"Nom":"MAYES","Prénom":"Callum","Sexe":"M","division":"3A","niveau":"3E"},
+  {"Dossard":356,"Nom":"MAZEAU","Prénom":"Nathan","Sexe":"M","division":"3A","niveau":"3E"},
+  {"Dossard":357,"Nom":"NOEL","Prénom":"Timaé","Sexe":"M","division":"3A","niveau":"3E"},
+  {"Dossard":358,"Nom":"OBONE OBAME","Prénom":"Barbara","Sexe":"F","division":"3A","niveau":"3E"},
+  {"Dossard":359,"Nom":"PEETERS","Prénom":"Enzo","Sexe":"M","division":"3A","niveau":"3E"},
+  {"Dossard":360,"Nom":"PICOULEAU","Prénom":"Melvin","Sexe":"M","division":"3A","niveau":"3E"},
+  {"Dossard":361,"Nom":"SACHET","Prénom":"Louka","Sexe":"M","division":"3A","niveau":"3E"},
+  {"Dossard":362,"Nom":"SURBIER","Prénom":"Ninon","Sexe":"F","division":"3A","niveau":"3E"},
+  {"Dossard":363,"Nom":"ULHMAN","Prénom":"Erwan","Sexe":"M","division":"3A","niveau":"3E"},
+  {"Dossard":364,"Nom":"VAN ZELE","Prénom":"Sohan","Sexe":"M","division":"3A","niveau":"3E"},
+  {"Dossard":365,"Nom":"VASLIN","Prénom":"Owen","Sexe":"M","division":"3A","niveau":"3E"},
+  {"Dossard":366,"Nom":"ZAGO","Prénom":"Elia","Sexe":"F","division":"3A","niveau":"3E"},
+  {"Dossard":367,"Nom":"AYRAULT","Prénom":"Andréa","Sexe":"F","division":"3B","niveau":"3E"},
+  {"Dossard":368,"Nom":"BARDET","Prénom":"Eliott","Sexe":"M","division":"3B","niveau":"3E"},
+  {"Dossard":369,"Nom":"BASSET","Prénom":"Louise","Sexe":"F","division":"3B","niveau":"3E"},
+  {"Dossard":370,"Nom":"BOURABIER","Prénom":"Loan","Sexe":"M","division":"3B","niveau":"3E"},
+  {"Dossard":371,"Nom":"BOUTIN","Prénom":"Louis","Sexe":"M","division":"3B","niveau":"3E"},
+  {"Dossard":372,"Nom":"BOUTIN","Prénom":"Luc","Sexe":"M","division":"3B","niveau":"3E"},
+  {"Dossard":373,"Nom":"CHICOT","Prénom":"Jahissah","Sexe":"M","division":"3B","niveau":"3E"},
+  {"Dossard":374,"Nom":"DAVIAUD","Prénom":"Orlane","Sexe":"F","division":"3B","niveau":"3E"},
+  {"Dossard":375,"Nom":"DORE","Prénom":"Nolann","Sexe":"M","division":"3B","niveau":"3E"},
+  {"Dossard":376,"Nom":"FAUSTIN","Prénom":"Léona","Sexe":"F","division":"3B","niveau":"3E"},
+  {"Dossard":377,"Nom":"FOLANÉ","Prénom":"Eloïse","Sexe":"F","division":"3B","niveau":"3E"},
+  {"Dossard":378,"Nom":"GREUILLET MAHAVORY","Prénom":"Kévin","Sexe":"M","division":"3B","niveau":"3E"},
+  {"Dossard":379,"Nom":"JACOB","Prénom":"Rafael","Sexe":"M","division":"3B","niveau":"3E"},
+  {"Dossard":380,"Nom":"LACOURARIE-DEPRE","Prénom":"Mazarine","Sexe":"F","division":"3B","niveau":"3E"},
+  {"Dossard":381,"Nom":"LAROCHE","Prénom":"Hugo","Sexe":"M","division":"3B","niveau":"3E"},
+  {"Dossard":382,"Nom":"LAROCHE","Prénom":"Noane","Sexe":"F","division":"3B","niveau":"3E"},
+  {"Dossard":383,"Nom":"LAUTOUR","Prénom":"Ambre","Sexe":"F","division":"3B","niveau":"3E"},
+  {"Dossard":384,"Nom":"LINARD","Prénom":"Julie","Sexe":"F","division":"3B","niveau":"3E"},
+  {"Dossard":385,"Nom":"MAGES CAMBEIRO","Prénom":"Celia","Sexe":"F","division":"3B","niveau":"3E"},
+  {"Dossard":386,"Nom":"MARTIN","Prénom":"Rose","Sexe":"F","division":"3B","niveau":"3E"},
+  {"Dossard":387,"Nom":"MOREAU","Prénom":"Elina","Sexe":"F","division":"3B","niveau":"3E"},
+  {"Dossard":388,"Nom":"MÉNARD ROULET","Prénom":"Lola","Sexe":"F","division":"3B","niveau":"3E"},
+  {"Dossard":389,"Nom":"RAYMOND","Prénom":"Valentin","Sexe":"M","division":"3B","niveau":"3E"},
+  {"Dossard":390,"Nom":"SAUVION","Prénom":"Edène","Sexe":"F","division":"3B","niveau":"3E"},
+  {"Dossard":391,"Nom":"SEGUIN","Prénom":"Faustine","Sexe":"F","division":"3B","niveau":"3E"},
+  {"Dossard":392,"Nom":"SERAFIN","Prénom":"Timéo","Sexe":"M","division":"3B","niveau":"3E"},
+  {"Dossard":393,"Nom":"TREUILLARD","Prénom":"Nathan","Sexe":"M","division":"3B","niveau":"3E"},
+  {"Dossard":394,"Nom":"VINCENT","Prénom":"Eloha","Sexe":"F","division":"3B","niveau":"3E"},
+  {"Dossard":395,"Nom":"BONTEMPS DE SOUSA","Prénom":"Gabriel","Sexe":"M","division":"3C","niveau":"3E"},
+  {"Dossard":396,"Nom":"BOURHIS RAFFIN","Prénom":"Ambre","Sexe":"F","division":"3C","niveau":"3E"},
+  {"Dossard":397,"Nom":"BROUCKAERT","Prénom":"Mavrick","Sexe":"M","division":"3C","niveau":"3E"},
+  {"Dossard":398,"Nom":"COBERAC","Prénom":"Lana","Sexe":"F","division":"3C","niveau":"3E"},
+  {"Dossard":399,"Nom":"DUCLOUX-CHABERNAUD","Prénom":"Monia","Sexe":"F","division":"3C","niveau":"3E"},
+  {"Dossard":400,"Nom":"DUPUY","Prénom":"Lola","Sexe":"F","division":"3C","niveau":"3E"},
+  {"Dossard":401,"Nom":"DURAND","Prénom":"Nathan","Sexe":"M","division":"3C","niveau":"3E"},
+  {"Dossard":402,"Nom":"DUSSOUL","Prénom":"Mélyne","Sexe":"F","division":"3C","niveau":"3E"},
+  {"Dossard":403,"Nom":"ERZ","Prénom":"Wendy","Sexe":"F","division":"3C","niveau":"3E"},
+  {"Dossard":404,"Nom":"ESPELTA TAURONI","Prénom":"Jakub","Sexe":"M","division":"3C","niveau":"3E"},
+  {"Dossard":405,"Nom":"GIGE CLERISSI","Prénom":"Lily","Sexe":"F","division":"3C","niveau":"3E"},
+  {"Dossard":406,"Nom":"GIRARD","Prénom":"Camille","Sexe":"F","division":"3C","niveau":"3E"},
+  {"Dossard":407,"Nom":"GROS","Prénom":"Axel","Sexe":"M","division":"3C","niveau":"3E"},
+  {"Dossard":408,"Nom":"LAURENT","Prénom":"Paoline","Sexe":"F","division":"3C","niveau":"3E"},
+  {"Dossard":409,"Nom":"MARRY","Prénom":"Théo","Sexe":"M","division":"3C","niveau":"3E"},
+  {"Dossard":410,"Nom":"MERCEREAU","Prénom":"Alex","Sexe":"M","division":"3C","niveau":"3E"},
+  {"Dossard":411,"Nom":"NIOLLET","Prénom":"Jessy","Sexe":"M","division":"3C","niveau":"3E"},
+  {"Dossard":412,"Nom":"PAPIN","Prénom":"Chloé","Sexe":"F","division":"3C","niveau":"3E"},
+  {"Dossard":413,"Nom":"PIERDON","Prénom":"Saona","Sexe":"F","division":"3C","niveau":"3E"},
+  {"Dossard":414,"Nom":"PIRIS","Prénom":"Lydie","Sexe":"F","division":"3C","niveau":"3E"},
+  {"Dossard":415,"Nom":"PITOU--BAVOL","Prénom":"Morgane","Sexe":"F","division":"3C","niveau":"3E"},
+  {"Dossard":416,"Nom":"REZZI","Prénom":"Garance","Sexe":"F","division":"3C","niveau":"3E"},
+  {"Dossard":417,"Nom":"RODIERE","Prénom":"Sofiane","Sexe":"M","division":"3C","niveau":"3E"},
+  {"Dossard":418,"Nom":"ROUSSEAU","Prénom":"Thibault","Sexe":"M","division":"3C","niveau":"3E"},
+  {"Dossard":419,"Nom":"SPILMONT","Prénom":"Cléa","Sexe":"F","division":"3C","niveau":"3E"},
+  {"Dossard":420,"Nom":"SPILMONT","Prénom":"Emma","Sexe":"F","division":"3C","niveau":"3E"},
+  {"Dossard":421,"Nom":"THOMAS","Prénom":"Leo","Sexe":"M","division":"3C","niveau":"3E"}
+];
+
+let studentsDB = JSON.parse(localStorage.getItem('cross_students_db') || 'null') || DEFAULT_STUDENTS;
+let studentMap = new Map();
+
+function inferNiveau(divStr) {
+  if (!divStr) return "CM2";
+  const d = String(divStr).trim().toUpperCase();
+  if (d.includes('6')) return "6E";
+  if (d.includes('5')) return "5E";
+  if (d.includes('4')) return "4E";
+  if (d.includes('3')) return "3E";
+  return "CM2";
+}
+
+function rebuildMap() {
+  studentMap.clear();
+  studentsDB.forEach(s => {
+    s.niveau = inferNiveau(s.division || s.niveau);
+    studentMap.set(String(s.Dossard), s);
+  });
+  document.getElementById('tabCount').textContent = studentsDB.length;
+  renderStudentsTable();
+}
+
+function saveStudents() {
+  localStorage.setItem('cross_students_db', JSON.stringify(studentsDB));
+  rebuildMap();
+}
+
+function switchTab(tabId, btn) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  btn.classList.add('active');
+  if (tabId === 'resultsTab') renderLeaderboard();
+}
+
+let races = JSON.parse(localStorage.getItem('cross_races_all') || '[]');
+let currentRaceId = localStorage.getItem('cross_current_race_id') || null;
+
+function getCurrentRace() {
+  if (!currentRaceId && races.length > 0) currentRaceId = races[0].id;
+  return races.find(r => r.id === currentRaceId) || null;
+}
+
+function initRacesIfEmpty() {
+  if (races.length === 0) {
+    const firstRace = {
+      id: 'race_' + Date.now(),
+      name: 'Course 1 (6èmes)',
+      levels: ['6E'],
+      startTime: null,
+      isFinished: false,
+      arrives: []
+    };
+    races.push(firstRace);
+    currentRaceId = firstRace.id;
+    saveRaces();
+  }
+}
+
+function saveRaces() {
+  localStorage.setItem('cross_races_all', JSON.stringify(races));
+  localStorage.setItem('cross_current_race_id', currentRaceId);
+  updateRaceSelectors();
+}
+
+function updateRaceSelectors() {
+  const selectDisplay = document.getElementById('selectDisplayRace');
+  const curDisplay = selectDisplay.value;
+  selectDisplay.innerHTML = '';
+
+  races.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r.id;
+    opt.textContent = `${r.name} (${r.arrives.length} arrivants) ${r.isFinished ? '— [Terminée]' : '— [En cours]'}`;
+    selectDisplay.appendChild(opt);
+  });
+  if (curDisplay && races.some(r => r.id === curDisplay)) selectDisplay.value = curDisplay;
+  else if (currentRaceId) selectDisplay.value = currentRaceId;
+
+  const curRace = getCurrentRace();
+  if (curRace) {
+    document.getElementById('raceNameInput').value = curRace.name;
+    document.querySelectorAll('.level-chk').forEach(chk => {
+      chk.checked = curRace.levels.includes(chk.value);
+    });
+    const badge = document.getElementById('raceStatusBadge');
+    if (curRace.isFinished) {
+      badge.textContent = "Course Clôturée";
+      badge.style.background = "#fee2e2";
+      badge.style.color = "#b91c1c";
+    } else if (curRace.startTime) {
+      badge.textContent = "Chrono actif";
+      badge.style.background = "#dcfce7";
+      badge.style.color = "#15803d";
+    } else {
+      badge.textContent = "En attente";
+      badge.style.background = "#e2e8f0";
+      badge.style.color = "#475569";
+    }
+  }
+}
+
+function startNewRacePrompt() {
+  const name = prompt("Nom de la course (ex: Course 2 - 5èmes) :", `Course ${races.length + 1}`);
+  if (!name) return;
+
+  const newRace = {
+    id: 'race_' + Date.now(),
+    name: name,
+    levels: ['5E'],
+    startTime: null,
+    isFinished: false,
+    arrives: []
+  };
+  races.push(newRace);
+  currentRaceId = newRace.id;
+  saveRaces();
+  resetChronoDisplay();
+}
+
+document.querySelectorAll('.level-chk').forEach(chk => {
+  chk.addEventListener('change', () => {
+    const curRace = getCurrentRace();
+    if (!curRace) return;
+    curRace.levels = Array.from(document.querySelectorAll('.level-chk:checked')).map(c => c.value);
+    saveRaces();
+  });
+});
+
+document.getElementById('raceNameInput').addEventListener('change', (e) => {
+  const curRace = getCurrentRace();
+  if (curRace) {
+    curRace.name = e.target.value.trim() || curRace.name;
+    saveRaces();
+  }
+});
+
+let timerInterval = null;
+let isRunning = false;
+let audioCtx = null;
+
+function initAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playBeep(freq = 880, duration = 0.12) {
+  try {
+    initAudio();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+  } catch(e) {}
+}
+
+function formatTime(ms) {
+  if (!ms || ms < 0) return "00:00.0";
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const remSec = s % 60;
+  const tenths = Math.floor((ms % 1000) / 100);
+  return `${String(m).padStart(2,'0')}:${String(remSec).padStart(2,'0')}.${tenths}`;
+}
+
+function updateDisplay() {
+  const curRace = getCurrentRace();
+  if (!isRunning || !curRace || !curRace.startTime) return;
+  document.getElementById('chronoDisplay').textContent = formatTime(Date.now() - curRace.startTime);
+}
+
+function toggleTimer() {
+  initAudio();
+  const curRace = getCurrentRace();
+  if (!curRace) return;
+
+  const btn = document.getElementById('btnStart');
+  if (!isRunning) {
+    if (!curRace.startTime) {
+      curRace.startTime = Date.now();
+      curRace.isFinished = false;
+      saveRaces();
+    }
+    timerInterval = setInterval(updateDisplay, 100);
+    isRunning = true;
+    btn.textContent = "⏸ Pause";
+    btn.className = "btn btn-danger";
+  } else {
+    clearInterval(timerInterval);
+    isRunning = false;
+    btn.textContent = "▶ Reprendre";
+    btn.className = "btn btn-success";
+  }
+}
+
+function resetChronoDisplay() {
+  clearInterval(timerInterval);
+  isRunning = false;
+  document.getElementById('chronoDisplay').textContent = "00:00.0";
+  document.getElementById('btnStart').textContent = "▶ Top Départ";
+  document.getElementById('btnStart').className = "btn btn-success";
+  document.getElementById('lastScanBanner').classList.remove('active');
+}
+
+function resetTimer() {
+  const curRace = getCurrentRace();
+  if (!confirm(`Effacer les arrivées et réinitialiser le chrono de "${curRace ? curRace.name : 'cette course'}" ?`)) return;
+  if (curRace) {
+    curRace.startTime = null;
+    curRace.isFinished = false;
+    curRace.arrives = [];
+    saveRaces();
+  }
+  document.getElementById('lastScanBanner').classList.remove('active');
+  renderLiveArrivals();
+  resetChronoDisplay();
+}
+
+function finishCurrentRace() {
+  const curRace = getCurrentRace();
+  if (!curRace) return;
+  if (!confirm(`Clôturer "${curRace.name}" (${curRace.arrives.length} arrivants) ?`)) return;
+  curRace.isFinished = true;
+  saveRaces();
+  clearInterval(timerInterval);
+  isRunning = false;
+  document.getElementById('btnStart').textContent = "▶ Top Départ";
+  document.getElementById('btnStart').className = "btn btn-success";
+  alert(`🏁 ${curRace.name} clôturée !`);
+}
+
+let lastScanText = null;
+let lastScanTime = 0;
+
+function registerArrival(dossardRaw) {
+  const dossardStr = String(dossardRaw).replace(/[^0-9]/g, '');
+  if (!dossardStr) return;
+
+  const now = Date.now();
+  if (dossardStr === lastScanText && (now - lastScanTime) < 3500) return;
+
+  const curRace = getCurrentRace();
+  if (!curRace) return alert("Aucune course active !");
+
+  if (curRace.arrives.some(a => a.dossard === dossardStr)) {
+    playBeep(300, 0.25);
+    alert(`⚠️ Le dossard #${dossardStr} a DÉJÀ franchi la ligne dans ${curRace.name} !`);
+    return;
+  }
+
+  const s = studentMap.get(dossardStr) || { Nom: "INCONNU", Prénom: "", division: "-", Sexe: "M", niveau: "AUTRE" };
+
+  const isHorsNiveau = (curRace.levels && curRace.levels.length > 0 && !curRace.levels.includes(s.niveau));
+  if (isHorsNiveau) {
+    playBeep(350, 0.25);
+  }
+
+  lastScanText = dossardStr;
+  lastScanTime = now;
+
+  const elapsedMs = curRace.startTime ? (now - curRace.startTime) : 0;
+  const sexeCount = curRace.arrives.filter(a => a.sexe === s.Sexe).length + 1;
+
+  const arrival = {
+    placeScratch: curRace.arrives.length + 1,
+    placeSexe: sexeCount,
+    dossard: dossardStr,
+    nom: s.Nom,
+    prenom: s.Prénom,
+    division: s.division,
+    niveau: s.niveau,
+    sexe: s.Sexe,
+    tempsMs: elapsedMs,
+    tempsStr: formatTime(elapsedMs),
+    timestamp: new Date().toLocaleTimeString()
+  };
+
+  curRace.arrives.push(arrival);
+  saveRaces();
+  renderLiveArrivals();
+  syncArrivalToFirestore(curRace.id, curRace.name, arrival);
+
+  playBeep(980, 0.12);
+  if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+
+  const banner = document.getElementById('lastScanBanner');
+  banner.classList.add('active');
+  document.getElementById('lastScanPlace').textContent = `Place Scratch #${arrival.placeScratch} (Place ${arrival.sexe} #${arrival.placeSexe})`;
+  document.getElementById('lastScanTime').textContent = arrival.tempsStr;
+  document.getElementById('lastScanName').textContent = `${arrival.nom} ${arrival.prenom}`;
+  document.getElementById('lastScanMeta').innerHTML = `Classe : <strong>${arrival.division}</strong> (${arrival.niveau} - ${arrival.sexe}) — Dossard #${arrival.dossard}` + (isHorsNiveau ? ' <span style="color:#dc2626; font-weight:bold;">⚠️ Hors niveau</span>' : '');
+}
+
+function handleDecodedQR(rawText) {
+  const text = String(rawText).trim();
+  if (!text) return;
+
+  if (/^\d+$/.test(text)) {
+    registerArrival(text);
+    return;
+  }
+
+  const matched = studentsDB.find(s => {
+    const sNom = (s.Nom || '').toUpperCase();
+    const sPrenom = (s.Prénom || '').toUpperCase();
+    const full = text.toUpperCase();
+    return full.includes(sNom) && full.includes(sPrenom);
+  });
+
+  if (matched) {
+    registerArrival(String(matched.Dossard));
+  } else {
+    const fallbackNum = text.replace(/[^0-9]/g, '');
+    if (fallbackNum && studentMap.has(fallbackNum)) {
+      registerArrival(fallbackNum);
+    } else {
+      playBeep(300, 0.25);
+      alert(`QR Code détecté mais élève non reconnu : "${text}"`);
+    }
+  }
+}
+
+function submitManual() {
+  initAudio();
+  const inp = document.getElementById('manualInput');
+  const val = inp.value.trim();
+  if (!val) return;
+
+  inp.value = '';
+  const curRace = getCurrentRace();
+  if (!curRace) return alert("Aucune course active ! Lancez d'abord le départ.");
+
+  if (/^\d+$/.test(val)) {
+    registerArrival(val);
+    return;
+  }
+
+  const valUpper = val.toUpperCase();
+  const words = valUpper.split(/\s+/);
+
+  const matched = studentsDB.find(s => {
+    const sNom = (s.Nom || '').toUpperCase();
+    const sPrenom = (s.Prénom || '').toUpperCase();
+    return (sNom.length > 1 && valUpper.includes(sNom)) ||
+           (words.length >= 2 && words.every(w => sNom.includes(w) || sPrenom.includes(w)));
+  });
+
+  if (matched) {
+    registerArrival(String(matched.Dossard));
+  } else {
+    registerUnlistedStudentArrival(val);
+  }
+}
+
+function registerUnlistedStudentArrival(rawName) {
+  const curRace = getCurrentRace();
+  if (!curRace) return;
+
+  const now = Date.now();
+  const elapsedMs = curRace.startTime ? (now - curRace.startTime) : 0;
+
+  let unlistedIndex = curRace.arrives.filter(a => String(a.dossard).startsWith('EXT-')).length + 1;
+  let tempDossard = `EXT-${unlistedIndex}`;
+
+  const parts = rawName.trim().split(/\s+/);
+  let nom = parts[0].toUpperCase();
+  let prenom = parts.slice(1).join(' ');
+  if (!prenom) { prenom = ""; }
+
+  const sexeChoice = confirm(`Enregistrer l'arrivée de "${rawName}" ?\n\nCliquez sur OK pour Garçon (G)\nCliquez sur Annuler pour Fille (F)`);
+  const defaultSexe = sexeChoice ? "M" : "F";
+
+  const sexeCount = curRace.arrives.filter(a => a.sexe === defaultSexe).length + 1;
+
+  const arrival = {
+    placeScratch: curRace.arrives.length + 1,
+    placeSexe: sexeCount,
+    dossard: tempDossard,
+    nom: nom,
+    prenom: prenom,
+    division: "Hors base",
+    niveau: curRace.levels[0] || "AUTRE",
+    sexe: defaultSexe,
+    tempsMs: elapsedMs,
+    tempsStr: formatTime(elapsedMs),
+    timestamp: new Date().toLocaleTimeString()
+  };
+
+  curRace.arrives.push(arrival);
+  saveRaces();
+  renderLiveArrivals();
+  syncArrivalToFirestore(curRace.id, curRace.name, arrival);
+
+  playBeep(980, 0.12);
+  if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+
+  const banner = document.getElementById('lastScanBanner');
+  banner.classList.add('active');
+  document.getElementById('lastScanPlace').textContent = `Place Scratch #${arrival.placeScratch} (Place ${arrival.sexe} #${arrival.placeSexe})`;
+  document.getElementById('lastScanTime').textContent = arrival.tempsStr;
+  document.getElementById('lastScanName').textContent = `${arrival.nom} ${arrival.prenom} (Saisie manuelle)`;
+  document.getElementById('lastScanMeta').innerHTML = `Classe : <strong>Hors base</strong> (${arrival.sexe}) — Réf #${arrival.dossard}`;
+}
+
+let currentSubTab = 'ALL';
+
+function switchSubTab(type) {
+  currentSubTab = type;
+  document.querySelectorAll('.sub-tab').forEach(b => b.classList.remove('active'));
+  if (type === 'ALL') document.getElementById('subTabAll').classList.add('active');
+  if (type === 'F') document.getElementById('subTabF').classList.add('active');
+  if (type === 'M') document.getElementById('subTabM').classList.add('active');
+  renderLeaderboard();
+}
+
+function renderLeaderboard() {
+  const select = document.getElementById('selectDisplayRace');
+  const raceId = select.value;
+  const race = races.find(r => r.id === raceId);
+  const tbody = document.getElementById('leaderboardBody');
+  tbody.innerHTML = '';
+
+  if (!race || race.arrives.length === 0) {
+    document.getElementById('leaderboardCount').textContent = "0 arrivant";
+    return;
+  }
+
+  let list = [...race.arrives];
+  if (currentSubTab === 'F') list = list.filter(a => a.sexe === 'F');
+  if (currentSubTab === 'M') list = list.filter(a => a.sexe === 'M');
+
+  document.getElementById('leaderboardCount').textContent = `${list.length} arrivant(s)`;
+
+  list.forEach(item => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:800; color:var(--muted);">${item.placeScratch}</td>
+      <td style="font-weight:800; color:var(--primary);">${item.placeSexe}</td>
+      <td><span class="dos-pill">#${item.dossard}</span></td>
+      <td><strong>${item.nom}</strong> ${item.prenom}</td>
+      <td><span class="gender-pill-${item.sexe}">${item.sexe}</span></td>
+      <td>${item.division}</td>
+      <td style="font-weight:700;">${item.tempsStr}</td>
+      <td style="text-align:right;">
+        <button class="btn btn-danger" style="padding:2px 6px; font-size:0.75rem;" onclick="deleteArrival('${race.id}', '${item.dossard}')" title="Annuler cette arrivée">🗑️</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function exportCurrentRaceCSV() {
+  const raceId = document.getElementById('selectDisplayRace').value;
+  const race = races.find(r => r.id === raceId);
+  if (!race || race.arrives.length === 0) return alert("Aucune arrivée dans cette course !");
+  
+  let csv = "\uFEFFPlace_Scratch;Place_Sexe;Dossard;Nom;Prénom;Sexe;Classe;Niveau;Temps;Heure_Arrivee\n";
+  race.arrives.forEach(a => {
+    csv += `${a.placeScratch};${a.placeSexe};${a.dossard};"${a.nom}";"${a.prenom}";"${a.sexe}";"${a.division}";"${a.niveau}";"${a.tempsStr}";"${a.timestamp}"\n`;
+  });
+  downloadCSV(csv, `classement_${race.name.replace(/[^a-z0-9]/gi, '_')}.csv`);
+}
+
+function exportAllRacesCSV() {
+  if (races.length === 0) return alert("Aucune course enregistrée !");
+  let csv = "\uFEFFCourse;Place_Scratch;Place_Sexe;Dossard;Nom;Prénom;Sexe;Classe;Niveau;Temps;Heure_Arrivee\n";
+  races.forEach(r => {
+    r.arrives.forEach(a => {
+      csv += `"${r.name}";${a.placeScratch};${a.placeSexe};${a.dossard};"${a.nom}";"${a.prenom}";"${a.sexe}";"${a.division}";"${a.niveau}";"${a.tempsStr}";"${a.timestamp}"\n`;
+    });
+  });
+  downloadCSV(csv, `resultats_cross_toutes_courses.csv`);
+}
+
+function downloadCSV(csv, filename) {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+}
+
+// Scanner Caméra
+let html5QrCode = null;
+let isScanning = false;
+
+async function loadCameras() {
+  const select = document.getElementById('cameraSelect');
+  select.innerHTML = '<option value="">Détection caméras...</option>';
+  try {
+    const devices = await Html5Qrcode.getCameras();
+    select.innerHTML = '';
+    if (devices && devices.length) {
+      devices.forEach((cam, idx) => {
+        const opt = document.createElement('option');
+        opt.value = cam.id;
+        const isBack = /back|rear|arri[eè]re|environment/i.test(cam.label);
+        opt.textContent = cam.label || `Objectif ${idx + 1}`;
+        if (isBack) opt.selected = true;
+        select.appendChild(opt);
+      });
+    } else {
+      select.innerHTML = '<option value="">Caméra par défaut</option>';
+    }
+  } catch(e) {
+    select.innerHTML = '<option value="">Caméra arrière</option>';
+  }
+}
+
+async function startCameraManual() {
+  initAudio();
+  const statusEl = document.getElementById('cameraStatus');
+  const toggleBtn = document.getElementById('btnCamToggle');
+
+  if (isScanning && html5QrCode) {
+    try { await html5QrCode.stop(); html5QrCode.clear(); } catch(e) {}
+    isScanning = false;
+    toggleBtn.textContent = "📷 Démarrer Caméra";
+    toggleBtn.className = "btn btn-primary";
+    statusEl.textContent = "Caméra arrêtée.";
+    return;
+  }
+
+  statusEl.textContent = "Démarrage caméra...";
+
+  try {
+    if (html5QrCode) {
+      try { await html5QrCode.stop(); html5QrCode.clear(); } catch(e) {}
+    }
+
+    html5QrCode = new Html5Qrcode("reader", {
+      formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
+      verbose: false
+    });
+
+    const select = document.getElementById('cameraSelect');
+    const selectedId = select.value;
+    const cameraConfig = selectedId ? { deviceId: { exact: selectedId } } : { facingMode: "environment" };
+
+    const scanConfig = {
+      fps: 20,
+      qrbox: (viewWidth, viewHeight) => {
+        const minEdge = Math.min(viewWidth, viewHeight);
+        return { width: Math.floor(minEdge * 0.85), height: Math.floor(minEdge * 0.85) };
+      }
+    };
+
+    await html5QrCode.start(
+      cameraConfig,
+      scanConfig,
+      (decodedText) => handleDecodedQR(decodedText),
+      () => {}
+    );
+
+    isScanning = true;
+    toggleBtn.textContent = "⏹ Arrêter";
+    toggleBtn.className = "btn btn-danger";
+    statusEl.textContent = "";
+
+    if (select.options.length <= 1) loadCameras();
+  } catch(err) {
+    isScanning = false;
+    toggleBtn.textContent = "📷 Démarrer Caméra";
+    toggleBtn.className = "btn btn-primary";
+    statusEl.textContent = "Erreur caméra : " + (err.message || err);
+  }
+}
+
+// Table Élèves & Import
+function parseCSV(text) {
+  const lines = text.split(/\r\n|\n|\r/).filter(l => l.trim().length > 0);
+  if (lines.length < 2) return [];
+
+  const headerLine = lines[0];
+  let sep = ';';
+  if ((headerLine.match(/,/g) || []).length > (headerLine.match(/;/g) || []).length) sep = ',';
+  if ((headerLine.match(/\t/g) || []).length > (headerLine.match(/;/g) || []).length) sep = '\t';
+
+  const headers = headerLine.split(sep).map(h => h.trim().replace(/^["']|["']$/g, '').toLowerCase());
+
+  const idxNom = headers.findIndex(h => h.includes('nom'));
+  const idxPrenom = headers.findIndex(h => h.includes('prénom') || h.includes('prenom'));
+  const idxSexe = headers.findIndex(h => h.includes('sexe') || h.includes('genre'));
+  const idxNiveau = headers.findIndex(h => h.includes('niveau'));
+  const idxClasse = headers.findIndex(h => h.includes('classe') || h.includes('division'));
+  const idxDos = headers.findIndex(h => h.includes('dossard') || h.includes('num'));
+
+  const parsed = [];
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i].split(sep).map(col => col.trim().replace(/^["']|["']$/g, ''));
+    if (row.length <= 1) continue;
+
+    const rawNom = idxNom !== -1 ? row[idxNom] : (row[0] || '');
+    const rawPrenom = idxPrenom !== -1 ? row[idxPrenom] : (row[1] || '');
+    const rawSexe = idxSexe !== -1 ? row[idxSexe].toUpperCase().charAt(0) : 'M';
+    const rawClasse = idxClasse !== -1 ? row[idxClasse] : (idxNiveau !== -1 ? row[idxNiveau] : 'Non classé');
+    const rawNiveau = idxNiveau !== -1 ? row[idxNiveau] : rawClasse;
+    const rawDos = (idxDos !== -1 && parseInt(row[idxDos])) ? parseInt(row[idxDos]) : null;
+
+    parsed.push({
+      Nom: rawNom,
+      Prénom: rawPrenom,
+      Sexe: rawSexe === 'F' ? 'F' : 'M',
+      division: rawClasse,
+      niveau: inferNiveau(rawClasse || rawNiveau),
+      Dossard: rawDos
+    });
+  }
+
+  parsed.sort((a, b) => (a.division || '').localeCompare(b.division || '') || (a.Nom || '').localeCompare(b.Nom || ''));
+  parsed.forEach((item, index) => {
+    if (!item.Dossard) item.Dossard = index + 1;
+  });
+
+  return parsed;
+}
+
+function handleCSVUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    const buffer = evt.target.result;
+    let text = "";
+    try {
+      const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
+      text = utf8Decoder.decode(buffer);
+    } catch (err) {
+      const ansiDecoder = new TextDecoder('windows-1252');
+      text = ansiDecoder.decode(buffer);
+    }
+
+    const records = parseCSV(text);
+    if (records.length > 0) {
+      studentsDB = records;
+      saveStudents();
+      alert(`✅ ${records.length} élèves chargés avec succès !`);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function loadDefaultStudents() {
+  studentsDB = DEFAULT_STUDENTS;
+  saveStudents();
+  alert("421 élèves actuels rechargés !");
+}
+
+function renderStudentsTable() {
+  const tbody = document.getElementById('studentsTableBody');
+  const search = document.getElementById('searchStudent').value.toLowerCase();
+  tbody.innerHTML = '';
+
+  const filtered = studentsDB.filter(s => 
+    (s.Nom || '').toLowerCase().includes(search) || 
+    (s.Prénom || '').toLowerCase().includes(search) || 
+    (s.division || '').toLowerCase().includes(search) ||
+    String(s.Dossard).includes(search)
+  );
+
+  filtered.slice(0, 100).forEach(s => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="dos-pill">#${s.Dossard}</span></td>
+      <td><strong>${s.Nom}</strong> ${s.Prénom}</td>
+      <td><span class="gender-pill-${s.Sexe}">${s.Sexe}</span></td>
+      <td><strong>${s.niveau}</strong></td>
+      <td>${s.division}</td>
+      <td style="text-align:right;">
+        <button class="btn btn-danger" style="padding:2px 6px; font-size:0.75rem;" onclick="deleteStudentFromDB(${s.Dossard})">🗑️</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderLiveArrivals() {
+  const tbody = document.getElementById('liveResultsBody');
+  const countEl = document.getElementById('liveScanCount');
+  if (!tbody) return;
+
+  const curRace = getCurrentRace();
+  if (!curRace || curRace.arrives.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:16px; color:#64748b;">En attente des premiers arrivants...</td></tr>';
+    if (countEl) countEl.textContent = '0';
+    return;
+  }
+
+  if (countEl) countEl.textContent = curRace.arrives.length;
+  tbody.innerHTML = '';
+
+  const reversed = [...curRace.arrives].reverse();
+  reversed.slice(0, 15).forEach(item => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:800; color:var(--muted);">${item.placeScratch}</td>
+      <td><span class="dos-pill">#${item.dossard}</span></td>
+      <td><strong>${item.nom}</strong> ${item.prenom}</td>
+      <td>${item.division}</td>
+      <td style="font-weight:700;">${item.tempsStr}</td>
+      <td style="text-align:right;">
+        <button class="btn btn-danger" style="padding:3px 8px; font-size:0.75rem;" onclick="deleteArrival('${curRace.id}', '${item.dossard}')">Supprimer</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function cancelLastScan() {
+  const curRace = getCurrentRace();
+  if (!curRace || curRace.arrives.length === 0) return alert("Aucun scan récent à annuler.");
+  const lastArrival = curRace.arrives[curRace.arrives.length - 1];
+  deleteArrival(curRace.id, lastArrival.dossard);
+}
+
+function quickCancelArrival() {
+  const inp = document.getElementById('quickDeleteArrivalInput');
+  const val = inp.value.trim();
+  if (!val) return alert("Veuillez saisir le numéro de dossard à supprimer.");
+  const curRace = getCurrentRace();
+  if (!curRace) return;
+  deleteArrival(curRace.id, val);
+  inp.value = '';
+}
+
+function deleteArrival(raceId, dossardStr) {
+  const race = races.find(r => r.id === raceId);
+  if (!race) return;
+
+  const target = race.arrives.find(a => String(a.dossard) === String(dossardStr));
+  if (!target) return alert(`Dossard #${dossardStr} introuvable dans cette course.`);
+
+  if (!confirm(`Supprimer l'arrivée du dossard #${dossardStr} (${target.nom} ${target.prenom}) ?`)) return;
+
+  // 1. Supprime de l'état local
+  race.arrives = race.arrives.filter(a => String(a.dossard) !== String(dossardStr));
+
+  // 2. Recalcule les places
+  let fCount = 0;
+  let mCount = 0;
+  race.arrives.forEach((a, idx) => {
+    a.placeScratch = idx + 1;
+    if (a.sexe === 'F') { fCount++; a.placeSexe = fCount; }
+    else { mCount++; a.placeSexe = mCount; }
+  });
+
+  saveRaces();
+  renderLiveArrivals();
+  renderLeaderboard();
+
+  // 3. Supprime de Firestore
+  deleteArrivalFromFirestore(raceId, dossardStr);
+
+  const banner = document.getElementById('lastScanBanner');
+  if (banner && banner.textContent.includes(dossardStr)) {
+    banner.classList.remove('active');
+  }
+
+  alert(`🗑️ Arrivée du dossard #${dossardStr} supprimée avec succès.`);
+}
+
+function deleteStudentFromDB(dossardNum) {
+  const target = studentsDB.find(s => parseInt(s.Dossard) === parseInt(dossardNum));
+  if (!target) return;
+
+  if (!confirm(`Supprimer définitivement l'élève #${dossardNum} (${target.Nom} ${target.Prénom}) de la base ?`)) return;
+
+  studentsDB = studentsDB.filter(s => parseInt(s.Dossard) !== parseInt(dossardNum));
+  saveStudents();
+  alert(`🗑️️ Dossard #${dossardNum} supprimé de la base.`);
+}
+
+function exportPDF(mode) {
+  const printArea = document.getElementById('pdfPrintArea');
+  printArea.innerHTML = '';
+
+  const dateStr = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const select = document.getElementById('selectDisplayRace');
+  const raceId = select.value;
+  const currentRace = races.find(r => r.id === raceId);
+
+  let racesToExport = [];
+  if (mode === 'CURRENT') {
+    if (!currentRace || currentRace.arrives.length === 0) {
+      alert("Aucune arrivée enregistrée dans cette course !");
+      return;
+    }
+    racesToExport = [currentRace];
+  } else {
+    racesToExport = races.filter(r => r.arrives.length > 0);
+    if (racesToExport.length === 0) {
+      alert("Aucun résultat enregistré dans le cross !");
+      return;
+    }
+  }
+
+  let html = '';
+  racesToExport.forEach((r, idx) => {
+    let list = [...r.arrives];
+    let subTitleFilter = "Classement Général (Scratch)";
+    if (mode === 'CURRENT') {
+      if (currentSubTab === 'F') { list = list.filter(a => a.sexe === 'F'); subTitleFilter = "Classement Filles"; }
+      if (currentSubTab === 'M') { list = list.filter(a => a.sexe === 'M'); subTitleFilter = "Classement Garçons"; }
+    }
+
+    const pageBreak = (idx > 0) ? 'style="page-break-before: always; margin-top: 20px;"' : '';
+
+    html += `
+      <div ${pageBreak}>
+        <div class="pdf-header">
+          <div class="pdf-title">CROSS DU COLLÈGE — CLAUDIE HAIGNERÉ</div>
+          <div class="pdf-meta">
+            <strong>${r.name}</strong> — ${subTitleFilter} | ${dateStr} (${list.length} arrivants)
+          </div>
+        </div>
+        <table class="pdf-table">
+          <thead>
+            <tr>
+              <th style="width:36px; text-align:center;">Scratch</th>
+              <th style="width:36px; text-align:center;">Sexe</th>
+              <th style="width:40px; text-align:center;">Dos.</th>
+              <th>Nom</th>
+              <th>Prénom</th>
+              <th style="width:28px; text-align:center;">Sexe</th>
+              <th style="width:60px;">Classe</th>
+              <th style="width:75px; text-align:right;">Temps</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    list.forEach(a => {
+      let rowClass = '';
+      if (a.placeScratch === 1) rowClass = 'class="podium-1"';
+      else if (a.placeScratch === 2) rowClass = 'class="podium-2"';
+      else if (a.placeScratch === 3) rowClass = 'class="podium-3"';
+
+      html += `
+        <tr ${rowClass}>
+          <td style="text-align:center; font-weight:800;">${a.placeScratch}</td>
+          <td style="text-align:center; font-weight:700; color:#1e3a8a;">${a.placeSexe}</td>
+          <td style="text-align:center; font-weight:700;">#${a.dossard}</td>
+          <td><strong>${a.nom}</strong></td>
+          <td>${a.prenom}</td>
+          <td style="text-align:center;">${a.sexe}</td>
+          <td>${a.division}</td>
+          <td style="text-align:right; font-weight:700;">${a.tempsStr}</td>
+        </tr>
+      `;
+    });
+
+    html += `
+          </tbody>
+        </table>
+      </div>
+    `;
+  });
+
+  printArea.innerHTML = html;
+
+  setTimeout(() => {
+    window.print();
+  }, 150);
+}
+
+window.addEventListener('load', () => {
+  initRacesIfEmpty();
+  rebuildMap();
+  updateRaceSelectors();
+
+  const curRace = getCurrentRace();
+  if (curRace && curRace.startTime && !curRace.isFinished) {
+    timerInterval = setInterval(updateDisplay, 100);
+    isRunning = true;
+    const btn = document.getElementById('btnStart');
+    btn.textContent = "⏸ Pause";
+    btn.className = "btn btn-danger";
+  }
+  renderLiveArrivals();
+  loadCameras();
+});
+</script>
+</body>
+</html>
