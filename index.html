@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Cross EPS — Poste d'Arrivée & Chrono</title>
+  <title>Cross EPS — Sas d'Arrivée & Chrono Partagé</title>
 
-  <!-- Scanner QR & Barcode -->
+  <!-- Moteur de scan QR & Codes-barres -->
   <script src="https://unpkg.com/html5-qrcode"></script>
 
-  <!-- Firebase Compat (v9) -->
+  <!-- Firebase SDK (v9 Compat) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
@@ -57,7 +57,6 @@
     }
     .badge-sync.offline { background: rgba(239, 68, 68, 0.15); color: #f87171; border-color: rgba(248, 113, 113, 0.3); }
 
-    /* Navigation Onglets */
     nav.app-tabs {
       display: flex;
       background: #0f172a;
@@ -96,7 +95,6 @@
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
     }
 
-    /* Course & Niveaux */
     .race-header { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
     .race-title-input {
       background: #090d16;
@@ -128,7 +126,6 @@
       color: #fff;
     }
 
-    /* Chronomètre */
     .chrono-box {
       background: radial-gradient(circle at center, #1e293b, #090d16);
       border: 1px solid #334155;
@@ -174,16 +171,20 @@
     .btn-ghost { background: transparent; border: 1px solid #334155; color: var(--text-muted); }
     .btn-ghost:hover { color: #fff; border-color: #64748b; }
 
-    /* Zone Scanner */
+    #reader-container {
+      position: relative;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1.5px solid var(--card-border);
+      background: #000;
+      margin-bottom: 8px;
+    }
     #reader {
       width: 100%;
       min-height: 220px;
-      border-radius: 10px;
-      overflow: hidden;
-      background: #000;
-      border: 1px solid var(--card-border);
-      margin-bottom: 8px;
+      filter: contrast(135%) brightness(105%);
     }
+
     .manual-entry { display: flex; gap: 8px; }
     .manual-entry input {
       flex: 1;
@@ -191,14 +192,33 @@
       border: 2px solid #334155;
       border-radius: 8px;
       padding: 10px 14px;
-      font-size: 1.2rem;
+      font-size: 1.3rem;
       font-weight: 800;
       color: #fff;
       text-align: center;
+      letter-spacing: 1px;
     }
     .manual-entry input:focus { outline: none; border-color: var(--accent); }
 
-    /* Dernier Scan Banner */
+    .quick-numpad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .quick-numpad button {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #fff;
+      font-size: 1.25rem;
+      font-weight: 800;
+      padding: 10px 0;
+      border-radius: 8px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .quick-numpad button:active { background: var(--primary); }
+
     .last-scan-card {
       background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 78, 59, 0.3));
       border: 1.5px solid var(--success);
@@ -217,7 +237,6 @@
     .last-scan-dossard { font-size: 1.6rem; font-weight: 900; color: #34d399; }
     .last-scan-card.anomaly .last-scan-dossard { color: #f87171; }
 
-    /* Tableau des arrivées */
     .table-container { max-height: 380px; overflow-y: auto; border: 1px solid var(--card-border); border-radius: 8px; }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
     th {
@@ -266,7 +285,6 @@
     }
     .sub-tab.active { background: #1e293b; color: #fff; }
 
-    /* Impression PDF */
     #pdfPrintArea { display: none; }
     @media print {
       body { background: white !important; color: black !important; padding: 0 !important; }
@@ -308,7 +326,7 @@
   </button>
   <button class="tab-btn" onclick="switchMainTab('tabConfig', this)">
     <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54A.484.484 0 0 0 14 2h-4c-.25 0-.46.18-.49.42l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.63 8.47c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-    Import Dossards
+    Import CSV
   </button>
 </nav>
 
@@ -317,7 +335,7 @@
 
   <div class="card">
     <div class="race-header">
-      <input type="text" id="raceTitle" class="race-title-input" value="Course 1 (6èmes)" onchange="syncRaceConfig()">
+      <input type="text" id="raceTitle" class="race-title-input" value="Course 1" onchange="syncRaceConfig()">
       <button class="btn btn-ghost" onclick="promptNewRace()" title="Créer une nouvelle course">
         <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
         Nouvelle
@@ -357,20 +375,31 @@
   <div class="card">
     <div style="display:flex; gap:8px; margin-bottom:8px;">
       <select id="cameraSelect" style="flex:1; background:#090d16; border:1px solid var(--card-border); color:#fff; border-radius:8px; padding:6px; font-size:0.8rem;"></select>
-      <button class="btn btn-primary" onclick="toggleCamera()">
-        <svg viewBox="0 0 24 24"><path d="M4 4h3l2-2h6l2 2h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm8 14a5 5 0 1 0 0-10 5 5 0 0 0 0 10z"/></svg>
-        Caméra
-      </button>
+      <button class="btn btn-primary" onclick="toggleCamera()">📷 Caméra</button>
+      <button class="btn btn-ghost" id="btnTorch" onclick="toggleTorch()" style="display:none;">🔦 Flash</button>
     </div>
 
-    <div id="reader"></div>
+    <div id="reader-container">
+      <div id="reader"></div>
+    </div>
 
     <div class="manual-entry">
-      <input type="number" pattern="[0-9]*" inputmode="numeric" id="manualDossard" placeholder="N° Dossard..." onkeydown="if(event.key==='Enter') submitManualDossard()">
-      <button class="btn btn-primary" onclick="submitManualDossard()">
-        <svg viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>
-        Valider
-      </button>
+      <input type="number" pattern="[0-9]*" inputmode="numeric" id="manualDossard" placeholder="Dossard..." onkeydown="if(event.key==='Enter') submitManualDossard()">
+      <button class="btn btn-primary" onclick="submitManualDossard()">OK</button>
+      <button class="btn btn-danger" onclick="clearQuickPad()">⌫</button>
+    </div>
+
+    <div class="quick-numpad">
+      <button onclick="pressPad('1')">1</button>
+      <button onclick="pressPad('2')">2</button>
+      <button onclick="pressPad('3')">3</button>
+      <button onclick="pressPad('4')">4</button>
+      <button onclick="pressPad('5')">5</button>
+      <button onclick="pressPad('6')">6</button>
+      <button onclick="pressPad('7')">7</button>
+      <button onclick="pressPad('8')">8</button>
+      <button onclick="pressPad('9')">9</button>
+      <button onclick="pressPad('0')" style="grid-column: span 3;">0</button>
     </div>
 
     <div class="last-scan-card" id="lastScanBanner">
@@ -459,7 +488,7 @@
   </div>
 </div>
 
-<!-- 3. CONFIGURATION / IMPORT DOSSIER ÉLÈVES -->
+<!-- 3. CONFIGURATION / IMPORT CSV -->
 <div class="container tab-content" id="tabConfig">
   <div class="card">
     <h3 style="font-size:1rem; font-weight:800; margin-bottom:8px;">Importation rapide des Dossards</h3>
@@ -480,7 +509,6 @@
   </div>
 </div>
 
-<!-- ZONE D'IMPRESSION A4 POUR LE COLLÈGE -->
 <div id="pdfPrintArea"></div>
 
 <script>
@@ -511,14 +539,20 @@ let raceState = {
   arrivals: []
 };
 
-let studentsDB = new Map(); // Dossard -> { niveau, sexe }
+let studentsDB = new Map();
 let currentCategory = 'ALL';
 let chronoTimer = null;
 let qrScanner = null;
 let camActive = false;
 let unsubscribeArrivals = null;
 
-// Bip sonore d'alerte lors d'une incohérence de niveau
+let videoTrack = null;
+let torchOn = false;
+
+// Variables anti-rebond pour le scanner
+let dernierScanTimestamp = 0;
+let dernierDossardScanne = null;
+
 function playAlertTone() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -556,7 +590,6 @@ function bindLiveState() {
     raceState.startTime = data.startTime || null;
     raceState.status = data.status || 'idle';
 
-    // Rendu IHM
     document.getElementById('raceTitle').value = raceState.title;
     document.getElementById('resultsRaceTitle').innerText = raceState.title;
     document.querySelectorAll('.level-chk').forEach(c => {
@@ -651,6 +684,7 @@ function finishRace() {
 
 function resetTimer() {
   if (confirm("Réinitialiser le chrono de cette épreuve ?")) {
+    raceState.arrivals = [];
     updateLive({ startTime: null, status: 'idle' });
   }
 }
@@ -658,6 +692,7 @@ function resetTimer() {
 function promptNewRace() {
   const name = prompt("Nom de la course :", "Course " + (new Date().getMinutes()));
   if (!name) return;
+  raceState.arrivals = [];
   updateLive({
     id: 'race_' + Date.now(),
     title: name,
@@ -678,7 +713,6 @@ function bindArrivalsListener(raceId) {
       snap.forEach(d => list.push(d.data()));
       list.sort((a, b) => a.tempsMs - b.tempsMs);
 
-      // Attribution places scratch, filles et garçons
       let rankScratch = 1;
       let rankF = 1;
       let rankM = 1;
@@ -696,7 +730,7 @@ function bindArrivalsListener(raceId) {
 }
 
 // ------------------------------------------
-// SCAN & CONTRÔLE NIVEAU
+// SCAN & CONTRÔLE NIVEAU (SANS FAUX POSITIF)
 // ------------------------------------------
 function recordDossard(dossardInput) {
   if (raceState.status !== 'running' || !raceState.startTime) {
@@ -704,46 +738,68 @@ function recordDossard(dossardInput) {
     return;
   }
 
-  const dossard = String(dossardInput).trim();
-  if (!dossard) return;
+  // Nettoyage strict : uniquement les chiffres
+  const cleanInput = String(dossardInput).trim().replace(/\D/g, '');
+  if (!cleanInput) return;
 
-  if (raceState.arrivals.some(a => a.dossard === dossard)) {
-    alert(`⚠️ Le dossard ${dossard} est déjà enregistré à l'arrivée !`);
+  const numDossard = parseInt(cleanInput, 10);
+  const now = Date.now();
+
+  // Anti-rebond : ignore un double scan immédiat (2s)
+  if (numDossard === dernierDossardScanne && (now - dernierScanTimestamp) < 2000) {
     return;
   }
 
-  const infoEleve = studentsDB.get(dossard) || { niveau: 'Inconnu', sexe: 'M' };
+  // Vérification doublon propre et silencieuse
+  const dejaPresent = raceState.arrivals.some(a => parseInt(a.dossard, 10) === numDossard);
+  if (dejaPresent) {
+    return;
+  }
+
+  dernierDossardScanne = numDossard;
+  dernierScanTimestamp = now;
+
+  const infoEleve = studentsDB.get(String(numDossard)) || { niveau: 'Inconnu', sexe: 'M' };
   const niveauConforme = raceState.levels.length === 0 || raceState.levels.includes(infoEleve.niveau);
 
   if (!niveauConforme) {
     playAlertTone();
   }
 
-  const elapsed = Date.now() - raceState.startTime;
+  const elapsed = now - raceState.startTime;
   const timeStr = formatTime(elapsed);
 
   const payload = {
-    dossard: dossard,
+    dossard: numDossard,
     niveau: infoEleve.niveau,
     sexe: infoEleve.sexe,
     niveauConforme: niveauConforme,
     tempsMs: elapsed,
     tempsStr: timeStr,
-    timestamp: Date.now()
+    timestamp: now
   };
 
-  db.collection("courses").doc(raceState.id).collection("arrives").doc(dossard).set(payload)
+  db.collection("courses").doc(raceState.id).collection("arrives").doc(String(numDossard)).set(payload)
     .then(() => {
       showLastScan(payload, raceState.arrivals.length + 1);
     })
-    .catch(err => alert("Erreur Firestore : " + err.message));
+    .catch(err => console.error("Erreur Firestore :", err));
 }
 
 function submitManualDossard() {
   const inp = document.getElementById('manualDossard');
   recordDossard(inp.value);
   inp.value = '';
-  inp.focus();
+}
+
+function pressPad(val) {
+  const inp = document.getElementById('manualDossard');
+  inp.value += val;
+}
+
+function clearQuickPad() {
+  const inp = document.getElementById('manualDossard');
+  inp.value = inp.value.slice(0, -1);
 }
 
 function removeArrival(dossard) {
@@ -833,8 +889,8 @@ function renderLeaderboard() {
   if (currentCategory === 'F') list = filles;
   if (currentCategory === 'M') list = garcons;
 
-  list.forEach((item, idx) => {
-    const rank = currentCategory === 'ALL' ? item.placeScratch : (currentCategory === 'F' ? item.placeSexe : item.placeSexe);
+  list.forEach(item => {
+    const rank = currentCategory === 'ALL' ? item.placeScratch : item.placeSexe;
     let rankBadge = `<span class="rank-pill">${rank}</span>`;
     if (rank === 1) rankBadge = `<span class="rank-pill rank-1">1</span>`;
     if (rank === 2) rankBadge = `<span class="rank-pill rank-2">2</span>`;
@@ -856,7 +912,7 @@ function renderLeaderboard() {
 }
 
 // ------------------------------------------
-// CAMÉRA
+// CAMÉRA & TORCHE FLASH
 // ------------------------------------------
 function initCameraDevices() {
   Html5Qrcode.getCameras().then(devs => {
@@ -878,21 +934,45 @@ function toggleCamera() {
     if (qrScanner) {
       qrScanner.stop().then(() => {
         camActive = false;
-        document.getElementById('reader').style.display = 'none';
+        document.getElementById('btnTorch').style.display = 'none';
       });
     }
   } else {
-    document.getElementById('reader').style.display = 'block';
     const camId = document.getElementById('cameraSelect').value;
     qrScanner = new Html5Qrcode("reader");
     qrScanner.start(
       camId || { facingMode: "environment" },
-      { fps: 15, qrbox: { width: 220, height: 180 } },
+      { fps: 20, experimentalFeatures: { useBarCodeDetectorIfSupported: true } },
       decoded => recordDossard(decoded),
       () => {}
-    ).then(() => { camActive = true; })
-     .catch(err => alert("Erreur Caméra : " + err));
+    ).then(() => {
+      camActive = true;
+      verifierSupportTorche();
+    }).catch(err => alert("Erreur Caméra : " + err));
   }
+}
+
+function verifierSupportTorche() {
+  try {
+    const videoElem = document.querySelector("#reader video");
+    if (videoElem && videoElem.srcObject) {
+      videoTrack = videoElem.srcObject.getVideoTracks()[0];
+      const capabilities = videoTrack.getCapabilities();
+      if (capabilities.torch) {
+        document.getElementById('btnTorch').style.display = 'inline-flex';
+      }
+    }
+  } catch (e) {}
+}
+
+function toggleTorch() {
+  if (!videoTrack) return;
+  torchOn = !torchOn;
+  videoTrack.applyConstraints({
+    advanced: [{ torch: torchOn }]
+  }).catch(() => {});
+  document.getElementById('btnTorch').style.background = torchOn ? '#eab308' : 'transparent';
+  document.getElementById('btnTorch').style.color = torchOn ? '#000' : 'var(--text-muted)';
 }
 
 // ------------------------------------------
