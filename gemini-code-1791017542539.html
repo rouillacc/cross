@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#08111f">
+<title>Cross EPS — Arrivées & Classement</title>
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<style>
+:root{
+  --bg:#07101c;--panel:#111c2d;--panel2:#0b1524;--line:#24344c;
+  --text:#f8fafc;--muted:#94a3b8;--blue:#2563eb;--cyan:#38bdf8;
+  --green:#10b981;--red:#ef4444;--yellow:#f59e0b;--pink:#ec4899;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}
+button,input,select{font:inherit}
+button{touch-action:manipulation;cursor:pointer}
+.hidden{display:none!important}
+header{position:sticky;top:0;z-index:50;background:#0c1626;border-bottom:1px solid var(--line);padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.brand{font-weight:950;font-size:1.05rem;display:flex;align-items:center;gap:7px}
+.brand span{font-size:1.25rem}
+.status{font-size:.72rem;font-weight:850;padding:6px 9px;border-radius:999px;background:#3b2a08;color:#fbbf24}
+.status.ok{background:#08372b;color:#34d399}
+.status.err{background:#43151b;color:#f87171}
+nav{display:flex;gap:5px;background:#0c1626;border-bottom:1px solid var(--line);padding:5px;position:sticky;top:53px;z-index:49}
+nav button{flex:1;border:0;background:transparent;color:var(--muted);font-weight:850;padding:10px 5px;border-radius:8px;font-size:.78rem}
+nav button.active{background:var(--blue);color:#fff}
+main{max-width:950px;margin:auto;padding:12px}
+.tab{display:none}
+.tab.active{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 5px 20px #0004}
+h1,h2,h3{margin:0 0 10px}
+h2{font-size:1.05rem}
+h3{font-size:.92rem}
+.muted{color:var(--muted);font-size:.82rem}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grow{flex:1}
+input,select{background:#07101c;color:#fff;border:1px solid #34455f;border-radius:9px;padding:10px;min-width:0}
+input:focus,select:focus{outline:2px solid #38bdf855;border-color:var(--cyan)}
+.btn{border:0;border-radius:9px;padding:10px 14px;font-weight:850;color:#fff;background:var(--blue);min-height:42px}
+.btn.green{background:var(--green)}
+.btn.red{background:var(--red)}
+.btn.ghost{background:transparent;border:1px solid #34455f;color:var(--muted)}
+.btn.yellow{background:#b77905}
+.chrono{background:radial-gradient(circle,#1a2a43,#07101c);border:1px solid #34455f;border-radius:13px;text-align:center;padding:14px;margin:12px 0}
+.digits{font-size:clamp(3rem,13vw,5rem);line-height:1;font-weight:950;letter-spacing:2px;color:var(--cyan);font-variant-numeric:tabular-nums;text-shadow:0 0 22px #38bdf844}
+.state{margin-top:7px;color:var(--muted);font-weight:850;font-size:.78rem;letter-spacing:1px}
+.levels{display:flex;gap:6px;flex-wrap:wrap}
+.level{border:1px solid #34455f;border-radius:999px;padding:7px 11px;color:var(--muted);font-size:.78rem;font-weight:800}
+.level input{accent-color:var(--cyan);padding:0}
+#reader{background:#000;border-radius:10px;overflow:hidden;min-height:170px;margin-top:8px}
+.scanline{font-size:.78rem;color:var(--muted);margin:7px 0}
+.manual{font-size:1.5rem;text-align:center;font-weight:950;flex:1;min-width:120px}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.pad button{padding:12px;border:1px solid #34455f;background:#172338;color:#fff;border-radius:8px;font-size:1.2rem;font-weight:900}
+.last{display:none;margin-top:10px;border:1px solid var(--green);background:#073427;padding:12px;border-radius:10px;animation:pop 0.2s ease-out}
+.last.show{display:block}
+.last.duplicate{border-color:var(--yellow);background:#332405}
+@keyframes pop {0%{transform:scale(0.98)}100%{transform:scale(1)}}
+.tablewrap{overflow:auto;max-height:470px;border:1px solid var(--line);border-radius:9px}
+table{width:100%;border-collapse:collapse;font-size:.83rem}
+th,td{padding:9px;border-bottom:1px solid #ffffff0d;text-align:left;white-space:nowrap}
+th{position:sticky;top:0;background:#0c1626;color:var(--muted);font-size:.7rem;text-transform:uppercase}
+.rank{display:inline-flex;width:27px;height:27px;align-items:center;justify-content:center;border-radius:50%;background:#1e293b;font-weight:950}
+.r1{background:#eab308;color:#000}
+.r2{background:#cbd5e1;color:#000}
+.r3{background:#d97706;color:#000}
+.importbox{border:1px dashed #40536f;border-radius:10px;padding:12px}
+.file{display:none}
+.diag{display:grid;gap:6px}
+.diag div{padding:9px;border-radius:8px;background:#07101c;font-size:.82rem}
+.oktxt{color:#34d399}
+.errtxt{color:#f87171}
+.waittxt{color:#fbbf24}
+
+/* ÉCRAN EN DIRECT SCREEN */
+.screenPage{display:none}
+.screenPage.active{display:block}
+.screen{min-height:calc(100vh - 20px);padding:20px;background:radial-gradient(circle at top,#172b48,#050911);text-align:center}
+.screen h1{font-size:clamp(1.5rem,5vw,3.4rem);margin:5px 0}
+.screen .sub{color:#38bdf8;font-weight:900;letter-spacing:1px;margin-bottom:16px}
+.live{max-width:1100px;margin:auto;text-align:left}
+.liveitem{
+  display:grid;
+  grid-template-columns:55px 1fr auto;
+  gap:16px;
+  align-items:center;
+  background:#101b2c;
+  border:2px solid #293c57;
+  border-radius:16px;
+  padding:14px 18px;
+  margin:10px 0;
+  transition:all 0.3s ease;
+}
+.liveitem:first-child{box-shadow:0 0 20px rgba(56,189,248,0.25)}
+
+/* COULEURS FILLES / GARÇONS SUR L'ÉCRAN */
+.liveitem.fille{
+  border-color:#f59e0b;
+  background:linear-gradient(90deg, rgba(245,158,11,0.18), #111c2d 30%);
+}
+.liveitem.fille .liveRank{color:#fbbf24}
+.liveitem.fille .liveGenderTag{background:#f59e0b26;color:#fbbf24;border:1px solid #f59e0b66}
+
+.liveitem.garcon{
+  border-color:#10b981;
+  background:linear-gradient(90deg, rgba(16,185,129,0.18), #111c2d 30%);
+}
+.liveitem.garcon .liveRank{color:#34d399}
+.liveitem.garcon .liveGenderTag{background:#10b98126;color:#34d399;border:1px solid #10b98166}
+
+.liveRank{font-size:1.8rem;font-weight:950;color:var(--cyan);text-align:center}
+.liveName{font-size:clamp(1.2rem,4vw,2.2rem);font-weight:950;letter-spacing:0.5px}
+.liveMeta{color:var(--text);font-size:1.05rem;font-weight:700;margin-top:4px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.liveMeta .badge{background:#0c1626;border:1px solid #334868;padding:2px 8px;border-radius:6px;font-size:0.9rem}
+.liveGenderTag{padding:2px 8px;border-radius:6px;font-size:0.85rem;font-weight:800}
+.liveTime{font-size:clamp(1.3rem,4.5vw,2.6rem);font-weight:950;color:var(--cyan);font-variant-numeric:tabular-nums}
+.empty{padding:70px 20px;color:var(--muted);text-align:center;font-size:1.2rem}
+
+@media(max-width:560px){
+  nav button{font-size:.68rem;padding:9px 2px}
+  .liveitem{grid-template-columns:40px 1fr;gap:8px;padding:10px}
+  .liveTime{grid-column:2;text-align:right}
+  .digits{font-size:3.4rem}
+}
+</style>
+</head>
+<body>
+<header id="appHeader"><div class="brand"><span>🏃</span> Cross EPS</div><div id="firebaseStatus" class="status">Connexion…</div></header>
+<nav id="mainNav">
+<button class="active" data-tab="liveTab">⏱️ Arrivée</button>
+<button data-tab="resultsTab">🏆 Classement</button>
+<button data-tab="configTab">⚙️ Gestion</button>
+<button data-tab="diagTab">🔧 Test</button>
+</nav>
+
+<main id="normalApp">
+<section id="liveTab" class="tab active">
+<div class="card">
+<div class="row"><input id="raceTitle" class="grow" value="Cross EPS"><button class="btn ghost" id="newRaceBtn">＋ Nouvelle course</button></div>
+<div class="levels" style="margin-top:9px">
+<label class="level"><input type="checkbox" value="CM2"> CM2</label><label class="level"><input type="checkbox" value="6E" checked> 6èmes</label><label class="level"><input type="checkbox" value="5E"> 5èmes</label><label class="level"><input type="checkbox" value="4E"> 4èmes</label><label class="level"><input type="checkbox" value="3E"> 3èmes</label>
+</div>
+<div class="chrono"><div id="chrono" class="digits">00:00.0</div><div id="raceState" class="state">EN ATTENTE DU DÉPART</div></div>
+<div class="row" style="justify-content:center"><button id="startBtn" class="btn green">▶ Top départ</button><button id="stopBtn" class="btn red">■ Clôturer</button><button id="resetBtn" class="btn ghost">↻ Reset chrono</button></div>
+</div>
+<div class="card">
+<h2>📷 Scanner l'arrivée (Scan continu ultra-rapide)</h2>
+<div class="row"><select id="cameraSelect" class="grow"></select><button id="cameraBtn" class="btn">📷 Caméra</button><button id="torchBtn" class="btn ghost hidden">🔦</button></div>
+<div id="reader"></div><div class="scanline">Scannez le QR Code de l'élève à son franchissement de ligne.</div>
+<div class="row"><input id="manualBib" class="manual" type="number" inputmode="numeric" placeholder="Dossard" autocomplete="off"><button id="manualBtn" class="btn">OK</button><button id="backBtn" class="btn red">⌫</button></div>
+<div class="pad">
+<button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button><button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button><button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button><button data-key="C">C</button><button data-key="0">0</button><button data-key="OK">✓</button>
+</div><div id="lastScan" class="last"></div>
+</div>
+</section>
+
+<section id="resultsTab" class="tab">
+<div class="card"><div class="row"><div class="grow"><h2>🏆 Classement</h2><div id="resultCount" class="muted">0 arrivée</div></div><button id="exportBtn" class="btn">⬇ CSV</button></div>
+<div class="row" style="margin:10px 0"><input id="filterText" class="grow" placeholder="Rechercher nom, prénom, classe ou dossard"></div>
+<div class="tablewrap"><table><thead><tr><th>Pl.</th><th>Élève</th><th>Sexe</th><th>Classe</th><th>Dossard</th><th>Temps</th></tr></thead><tbody id="resultsBody"></tbody></table></div></div>
+</section>
+
+<section id="configTab" class="tab">
+<div class="card"><h2>📥 Importer les élèves</h2><div class="muted" style="margin-bottom:8px">CSV : <b>Dossard;Nom;Prenom;Sexe;Classe (ou Division)</b>.</div><div class="importbox"><input id="csvFile" class="file" type="file" accept=".csv,text/csv,text/plain"><button id="importBtn" class="btn">Choisir un CSV</button><div id="importInfo" class="muted" style="margin-top:8px"></div></div></div>
+<div class="card"><h2>🖥️ Écran classement en direct</h2><div class="muted">Sur la tablette ou l'écran géant, ouvrez ce lien :</div><div style="padding:10px;background:#07101c;border-radius:8px;margin-top:7px;word-break:break-all">https://rouillacc.github.io/cross/?mode=screen</div><div class="muted" style="margin-top:7px">Les élèves s'affichent instantanément en <b>Jaune (Filles)</b> ou <b>Vert (Garçons)</b> dès le scan.</div></div>
+</section>
+
+<section id="diagTab" class="tab">
+<div class="card"><h2>🔧 Diagnostic Firebase</h2><div class="diag"><div id="d1">⏳ SDK Firebase…</div><div id="d2">⏳ Application…</div><div id="d3">⏳ Firestore…</div><div id="d4">⏳ Écriture…</div><div id="d5">⏳ Lecture…</div></div><p id="diagError" class="errtxt"></p><button id="diagBtn" class="btn">↻ Relancer</button></div>
+</section>
+</main>
+
+<section id="screenPage" class="screenPage">
+  <div class="screen">
+    <div class="muted">🏃 CROSS EPS</div>
+    <h1 id="screenRaceTitle">Cross EPS</h1>
+    <div class="sub">● DERNIÈRES ARRIVÉES · TOTAL : <span id="screenCount">0</span></div>
+    <div id="liveList" class="live"></div>
+  </div>
+</section>
+
+<script>
+const firebaseConfig={apiKey:"AIzaSyAh1Rf4u6iAdS81yX8yEgJ37vJAd9gOvI",authDomain:"cross-75701.firebaseapp.com",projectId:"cross-75701",storageBucket:"cross-75701.firebasestorage.app",messagingSenderId:"415446500180",appId:"1:415446500180:web:316da849eec78abb9afec1"};
+let db=null,courseId=null,courseData={},results=[],students=[],scanner=null,scanning=false,timer=null,localStart=0;
+let lastScanTime=0, lastScanBib="";
+
+const $=id=>document.getElementById(id);
+const fmt=ms=>{ms=Math.max(0,Number(ms)||0);return String(Math.floor(ms/60000)).padStart(2,"0")+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+Math.floor(ms%1000/100)};
+function setStatus(t,c=""){ $("firebaseStatus").textContent=t;$("firebaseStatus").className="status "+c }
+function diag(id,t,c){if($(id)){$(id).textContent=t;$(id).className=c||""}}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+function getActiveCourseRef(){return db.collection("cross_config").doc("active")}
+
+async function init(){
+ try{
+  diag("d1","⏳ SDK Firebase…","waittxt");
+  if(!window.firebase)throw new Error("SDK Firebase non chargé");
+  diag("d1","✅ SDK Firebase chargé","oktxt");
+  if(!firebase.apps.length)firebase.initializeApp(firebaseConfig);
+  diag("d2","✅ Firebase App initialisée","oktxt");
+  db=firebase.firestore();diag("d3","⏳ Firestore…","waittxt");
+  await db.collection("cross_diagnostic").doc("connection").set({ok:true,at:firebase.firestore.FieldValue.serverTimestamp()});
+  diag("d4","✅ Écriture Firestore OK","oktxt");
+  const snap=await db.collection("cross_diagnostic").doc("connection").get({source:"server"});
+  diag("d3","✅ Firestore connecté","oktxt");diag("d5",snap.exists?"✅ Lecture Firestore OK":"⚠️ Lecture sans document","oktxt");setStatus("● Firebase connecté","ok");
+  await ensureActiveCourse();listenActiveCourse();
+ }catch(e){console.error(e);setStatus("● Erreur Firebase","err");diag("d3","❌ "+(e.code||"Firestore"),"errtxt");if($("diagError"))$("diagError").textContent=e.message}
+}
+
+async function ensureActiveCourse(){
+ const ref=getActiveCourseRef(),snap=await ref.get();
+ if(snap.exists&&snap.data().courseId){courseId=snap.data().courseId}
+ else{courseId="course_"+Date.now();await ref.set({courseId,title:"Cross EPS",updatedAt:firebase.firestore.FieldValue.serverTimestamp()});}
+ await loadCourseMeta();
+}
+
+async function loadCourseMeta(){
+ const s=await db.collection("cross_courses").doc(courseId).get();
+ if(!s.exists)await db.collection("cross_courses").doc(courseId).set({title:"Cross EPS",createdAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+}
+
+let unsubResults=null,unsubStudents=null,unsubMeta=null;
+function listenActiveCourse(){
+ getActiveCourseRef().onSnapshot(async s=>{
+  const id=s.data()?.courseId;if(!id)return;
+  if(id!==courseId){courseId=id;await loadCourseMeta()}
+  listenCourse();
+ });
+}
+
+function listenCourse(){
+ if(unsubResults)unsubResults();if(unsubStudents)unsubStudents();if(unsubMeta)unsubMeta();
+ const ref=db.collection("cross_courses").doc(courseId);
+ unsubMeta=ref.onSnapshot(s=>{
+   courseData=s.data()||{};
+   if($("raceTitle"))$("raceTitle").value=courseData.title||"Cross EPS";
+   if($("screenRaceTitle"))$("screenRaceTitle").textContent=courseData.title||"Cross EPS";
+   updateTimerState();
+ });
+ 
+ // Charge la liste des élèves (globale ou de la course)
+ unsubStudents=db.collection("cross_students").onSnapshot(s=>{
+   if(!s.empty){
+     students=s.docs.map(d=>({id:d.id,...d.data()}));
+   } else {
+     ref.collection("students").onSnapshot(sub=>{
+       students=sub.docs.map(d=>({id:d.id,...d.data()}));
+     });
+   }
+ });
+
+ unsubResults=ref.collection("results").onSnapshot(s=>{
+   results=s.docs.map(d=>({id:d.id,...d.data()}));
+   results.sort((a,b)=>(Number(a.timeMs)||0)-(Number(b.timeMs)||0));
+   renderResults();
+   renderLive();
+ });
+}
+
+function updateTimerState(){
+ const st=Number(courseData.startAtMs)||0;
+ if(st>0){
+   localStart=st; 
+   if(!courseData.finished){startLocalTicker();if($("raceState"))$("raceState").textContent="COURSE EN COURS"}
+   else{if($("raceState"))$("raceState").textContent="COURSE CLÔTURÉE"}
+ } else {
+   if($("raceState"))$("raceState").textContent="EN ATTENTE DU DÉPART";
+   if($("chrono"))$("chrono").textContent="00:00.0";
+ }
+}
+
+function startLocalTicker(){
+  clearInterval(timer);
+  timer=setInterval(()=>{if($("chrono"))$("chrono").textContent=fmt(Date.now()-localStart)},50);
+}
+
+$("startBtn").onclick=async()=>{
+  const now=Date.now();
+  await db.collection("cross_courses").doc(courseId).set({startAtMs:now,finished:false},{merge:true});
+  localStart=now;
+  startLocalTicker();
+};
+
+$("stopBtn").onclick=async()=>{
+  clearInterval(timer);
+  await db.collection("cross_courses").doc(courseId).set({finished:true},{merge:true});
+  if($("raceState"))$("raceState").textContent="COURSE CLÔTURÉE";
+};
+
+$("resetBtn").onclick=async()=>{
+  if(!confirm("Réinitialiser le chrono de cette course ?"))return;
+  clearInterval(timer);
+  await db.collection("cross_courses").doc(courseId).set({startAtMs:0,finished:false},{merge:true});
+  if($("chrono"))$("chrono").textContent="00:00.0";
+  if($("raceState"))$("raceState").textContent="EN ATTENTE DU DÉPART";
+};
+
+if($("raceTitle"))$("raceTitle").onchange=()=>db.collection("cross_courses").doc(courseId).set({title:$("raceTitle").value||"Cross EPS"},{merge:true});
+
+$("newRaceBtn").onclick=async()=>{
+  if(!confirm("Créer une nouvelle course ?"))return;
+  const id="course_"+Date.now();
+  await db.collection("cross_courses").doc(id).set({title:"Course "+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),startAtMs:0,finished:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+  await getActiveCourseRef().set({courseId:id,title:"Course "+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+  courseId=id;
+  listenCourse();
+};
+
+/* SCAN RAPIDE : PAS DE MODAL, PAS D'ALERTE BLOQUANTE */
+async function recordArrival(raw){
+ let bib=String(raw??"").trim().replace(/[^\d]/g,"");
+ if(!bib)return;
+
+ // Anti-rebond (ignore si même dossard scanné en moins de 2 secondes)
+ const nowTime = Date.now();
+ if(bib === lastScanBib && (nowTime - lastScanTime) < 2000) return;
+ lastScanBib = bib;
+ lastScanTime = nowTime;
+
+ const ref=db.collection("cross_courses").doc(courseId);
+ const resRef=ref.collection("results").doc("dossard_"+bib);
+ const st=students.find(s=>String(s.dossard)===bib);
+
+ const start=Number(courseData.startAtMs)||0;
+ const timeMs=start > 0 ? Math.max(0, nowTime - start) : 0;
+
+ try{
+  let alreadyScanned = false;
+  await db.runTransaction(async tx=>{
+    const old=await tx.get(resRef);
+    if(old.exists){
+      alreadyScanned = true;
+      return;
+    }
+    tx.set(resRef,{
+      dossard: bib,
+      nom: st?.nom||"",
+      prenom: st?.prenom||"",
+      classe: st?.classe||st?.division||st?.niveau||"",
+      sexe: (st?.sexe||"").toUpperCase().trim(),
+      timeMs,
+      scannedAtMs: nowTime,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  });
+
+  if(alreadyScanned){
+    // Notification discrète sans pop-up
+    showLast(bib, st, timeMs, true, "Déjà scanné");
+  } else {
+    showLast(bib, st, timeMs, false);
+  }
+ }catch(e){
+   console.warn("Scan:", e.message);
+ }
+ if($("manualBib")) $("manualBib").value="";
+}
+
+function showLast(bib,st,time,isDup,msg){
+  if(!$("lastScan"))return;
+  $("lastScan").className="last show"+(isDup?" duplicate":"");
+  const nomComplet = st ? (st.nom+" "+st.prenom).trim() : "Dossard "+bib;
+  const classe = st?.classe || st?.division || "";
+  if(isDup){
+    $("lastScan").innerHTML = `⚠️ <b>#${esc(bib)} ${esc(nomComplet)}</b> a déjà été scanné`;
+  } else {
+    $("lastScan").innerHTML = `⚡ <b>#${esc(bib)} ${esc(nomComplet)}</b> (${esc(classe)}) enregistré à <b>${fmt(time)}</b>`;
+  }
+}
+
+if($("manualBtn"))$("manualBtn").onclick=()=>recordArrival($("manualBib").value);
+if($("manualBib"))$("manualBib").onkeydown=e=>{if(e.key==="Enter")recordArrival(e.target.value)};
+if($("backBtn"))$("backBtn").onclick=()=>{$("manualBib").value=$("manualBib").value.slice(0,-1);$("manualBib").focus()};
+
+document.querySelectorAll(".pad button").forEach(b=>b.onclick=()=>{
+  const k=b.dataset.key;
+  if(k==="C")$("manualBib").value="";
+  else if(k==="OK")recordArrival($("manualBib").value);
+  else $("manualBib").value+=k;
+  $("manualBib").focus();
+});
+
+async function cameras(){
+  try{
+    const cams=await Html5Qrcode.getCameras();
+    if($("cameraSelect"))$("cameraSelect").innerHTML="";
+    cams.forEach((c,i)=>{
+      const o=document.createElement("option");
+      o.value=c.id;
+      o.textContent=c.label||"Caméra "+(i+1);
+      if($("cameraSelect"))$("cameraSelect").appendChild(o);
+    });
+  }catch(e){
+    if($("cameraSelect"))$("cameraSelect").innerHTML="<option>Caméra indisponible</option>";
+  }
+}
+
+if($("cameraBtn"))$("cameraBtn").onclick=async()=>{
+  if(scanning){
+    try{await scanner.stop()}catch(e){}
+    scanning=false;
+    $("cameraBtn").textContent="📷 Caméra";
+    return;
+  }
+  try{
+    scanner=scanner||new Html5Qrcode("reader");
+    await scanner.start(
+      $("cameraSelect").value,
+      {fps:20, qrbox:{width:260,height:180}},
+      txt=>recordArrival(txt),
+      ()=>{}
+    );
+    scanning=true;
+    $("cameraBtn").textContent="⏹ Arrêter";
+  }catch(e){
+    alert("Impossible d'ouvrir la caméra : "+e.message);
+  }
+};
+
+function renderResults(){
+ if(!$("resultsBody")) return;
+ const q=$("filterText").value.toLowerCase().trim();
+ let a=results.filter(r=>(r.nom+" "+r.prenom+" "+r.classe+" "+r.dossard).toLowerCase().includes(q));
+ if($("resultCount"))$("resultCount").textContent=results.length+" arrivée(s)";
+ $("resultsBody").innerHTML=a.map((r,i)=>`
+   <tr>
+     <td><span class="rank ${i<3?"r"+(i+1):""}">${i+1}</span></td>
+     <td><b>${esc(r.nom||"—")}</b> ${esc(r.prenom||"")}</td>
+     <td>${esc(r.sexe||"—")}</td>
+     <td>${esc(r.classe||"—")}</td>
+     <td>${esc(r.dossard)}</td>
+     <td><b>${fmt(r.timeMs)}</b></td>
+   </tr>
+ `).join("")||"<tr><td colspan=6 style='text-align:center;color:#94a3b8;padding:30px'>Aucune arrivée</td></tr>";
+}
+
+/* RENDU EN DIRECT : COULEURS JAUNE (FILLES) ET VERT (GARÇONS) */
+function renderLive(){
+ const a=[...results].sort((x,y)=>(Number(y.scannedAtMs)||0)-(Number(x.scannedAtMs)||0)).slice(0,5);
+ if($("screenCount")) $("screenCount").textContent=results.length;
+ if(!$("liveList")) return;
+
+ $("liveList").innerHTML = a.length ? a.map((r, i) => {
+   const sexe = (r.sexe || "").toUpperCase().trim();
+   const isFille = sexe === "F" || sexe === "FILLE";
+   const isGarcon = sexe === "M" || sexe === "G" || sexe === "GARCON";
+   const colorClass = isFille ? "fille" : (isGarcon ? "garcon" : "");
+   const tagGenre = isFille ? `<span class="liveGenderTag">Fille</span>` : (isGarcon ? `<span class="liveGenderTag">Garçon</span>` : "");
+   const nomPrenom = ((r.nom || "") + " " + (r.prenom || "")).trim() || ("Dossard #" + r.dossard);
+   const classe = r.classe ? `<span class="badge">Classe : ${esc(r.classe)}</span>` : "";
+
+   return `
+     <div class="liveitem ${colorClass}">
+       <div class="liveRank">#${results.indexOf(r) + 1}</div>
+       <div>
+         <div class="liveName">${esc(nomPrenom)}</div>
+         <div class="liveMeta">
+           <span class="badge">Dossard <b>${esc(r.dossard)}</b></span>
+           ${classe}
+           ${tagGenre}
+         </div>
+       </div>
+       <div class="liveTime">${fmt(r.timeMs)}</div>
+     </div>
+   `;
+ }).join("") : "<div class='empty'>🏁<br><br>En attente des franchissements de ligne…</div>";
+}
+
+if($("filterText"))$("filterText").oninput=renderResults;
+
+if($("exportBtn"))$("exportBtn").onclick=()=>{
+  const rows=[["Classement","Nom","Prénom","Sexe","Classe","Dossard","Temps"],...results.map((r,i)=>[i+1,r.nom||"",r.prenom||"",r.sexe||"",r.classe||"",r.dossard,fmt(r.timeMs)])];
+  const csv="\uFEFF"+rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(";")).join("\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+  a.download="classement_cross.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+function splitCSV(line,sep){
+  let out=[],cur="",q=false;
+  for(let i=0;i<line.length;i++){
+    let c=line[i];
+    if(c==='"'&&line[i+1]==='"'){cur+='"';i++;continue}
+    if(c==='"'){q=!q;continue}
+    if(c===sep&&!q){out.push(cur.trim());cur=""}else cur+=c;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+function parseCSV(text){
+  text=text.replace(/^\uFEFF/,"").replace(/\r/g,"");
+  const lines=text.split("\n").filter(x=>x.trim());
+  if(!lines.length)return[];
+  const sep=(lines[0].match(/;/g)||[]).length>=(lines[0].match(/,/g)||[]).length?";":",";
+  const h=splitCSV(lines[0],sep).map(x=>x.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,""));
+  
+  const idx=(names)=>{
+    for(const n of names){
+      const i=h.findIndex(x=>x.includes(n));
+      if(i>=0)return i;
+    }
+    return -1;
+  };
+
+  const D=idx(["dossard","numero","num"]);
+  const N=idx(["nom"]);
+  const P=idx(["prenom"]);
+  const C=idx(["classe","division","groupe","niveau"]);
+  const S=idx(["sexe","genre"]);
+
+  return lines.slice(1).map(l=>{
+    const a=splitCSV(l,sep),v=i=>i>=0?(a[i]||"").trim():"";
+    return{
+      dossard:v(D),
+      nom:v(N),
+      prenom:v(P),
+      classe:v(C),
+      sexe:v(S).toUpperCase()
+    };
+  }).filter(x=>x.dossard);
+}
+
+if($("importBtn"))$("importBtn").onclick=()=>$("csvFile").click();
+if($("csvFile"))$("csvFile").onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  $("importInfo").textContent="Importation en cours…";
+  try{
+    const rows=parseCSV(await f.text());
+    if(!rows.length)throw new Error("Aucun élève détecté dans le fichier.");
+    // Enregistrement dans une collection générale pour servir à toutes les courses
+    for(let i=0;i<rows.length;i+=400){
+      const b=db.batch();
+      rows.slice(i,i+400).forEach(s=>{
+        b.set(db.collection("cross_students").doc("dossard_"+s.dossard),s,{merge:true});
+      });
+      await b.commit();
+    }
+    $("importInfo").textContent="✅ "+rows.length+" élèves importés et prêts pour toutes les courses !";
+    e.target.value="";
+  }catch(err){
+    $("importInfo").textContent="❌ "+err.message;
+  }
+};
+
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");
+  $(b.dataset.tab).classList.add("active");
+});
+
+function enterScreen(){
+  if($("appHeader"))$("appHeader").classList.add("hidden");
+  if($("mainNav"))$("mainNav").classList.add("hidden");
+  if($("normalApp"))$("normalApp").classList.add("hidden");
+  $("screenPage").classList.add("active");
+  document.body.style.background="#050911";
+}
+
+if($("diagBtn"))$("diagBtn").onclick=()=>init();
+if(new URLSearchParams(location.search).get("mode")==="screen")enterScreen();
+cameras();
+init();
+</script>
+</body>
+</html>
